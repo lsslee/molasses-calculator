@@ -13,7 +13,7 @@ MW_GLU = 180.16
 MW_FRU = 180.16
 MW_SUC = 342.30
 
-# Custom CSS
+# Custom CSS (실제 당농도 하이라이트 및 UI 개선)
 st.markdown(
     """
     <style>
@@ -29,6 +29,32 @@ st.markdown(
         font-weight: bold;
         font-size: 1.1rem;
         margin-bottom: 8px;
+    }
+    /* 역산된 실제 당농도 하이라이트 카드 스타일 */
+    .highlight-card {
+        background-color: #eef5ff;
+        border: 2px solid #3867d6;
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+        box-shadow: 0 4px 10px rgba(56, 103, 214, 0.15);
+    }
+    .highlight-title {
+        color: #264653;
+        font-size: 1.1rem;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    .highlight-value {
+        color: #3867d6;
+        font-size: 2.5rem;
+        font-weight: 800;
+        margin: 5px 0;
+    }
+    .highlight-delta {
+        font-size: 1.0rem;
+        font-weight: bold;
+        color: #20bf6b;
     }
     </style>
 """,
@@ -48,18 +74,10 @@ selected_sources = st.sidebar.multiselect(
     default=["포도당", "정제당"],
 )
 
-# 오차 표시 방식 선택 (절대 차이 vs 상대 오차)
-diff_mode = st.sidebar.radio(
-    "오차율 표시 방식 선택",
-    ["절대 차이 (%p)", "상대 오차 (%)"],
-    index=0,
-    help="절대 차이: 실제 농도 - 스펙 농도 (%p)\n상대 오차: (실제 농도 - 스펙 농도) / 스펙 농도 * 100 (%)",
-)
-
 # 기본값 초기화
 target_glu, p_glu = 0.0, 91.0
 target_liq, p_liq = 0.0, 75.0
-target_ref, c_ref_suc, c_ref_glu, c_ref_fru = 0.0, 99.0, 0.5, 0.5
+target_ref, c_ref_suc, c_ref_glu, c_ref_fru = 0.0, 12.0, 5.0, 8.0
 target_mol, c_mol_suc, c_mol_glu, c_mol_fru = 0.0, 5.8, 8.3, 9.7
 
 if "포도당" in selected_sources:
@@ -93,6 +111,14 @@ if "정제당" in selected_sources:
         "정제당 Fructose 스펙 (%)", value=8.0, step=0.1
     )
 
+    # 3개 농도 자동 합계 (수정 불가 disabled)
+    ref_spec_sum = c_ref_suc + c_ref_glu + c_ref_fru
+    st.sidebar.number_input(
+        "🔒 정제당 스펙 당농도 합계 (%)",
+        value=float(ref_spec_sum),
+        disabled=True,
+    )
+
 if "당밀" in selected_sources:
     st.sidebar.subheader("당밀 스펙 및 목표")
     target_mol = st.sidebar.number_input(
@@ -106,6 +132,14 @@ if "당밀" in selected_sources:
     )
     c_mol_fru = st.sidebar.number_input(
         "당밀 Fructose 스펙 (%)", value=9.7, step=0.1
+    )
+
+    # 3개 농도 자동 합계 (수정 불가 disabled)
+    mol_spec_sum = c_mol_suc + c_mol_glu + c_mol_fru
+    st.sidebar.number_input(
+        "🔒 당밀 스펙 당농도 합계 (%)",
+        value=float(mol_spec_sum),
+        disabled=True,
     )
 
 col1, col2 = st.columns([1, 1])
@@ -191,18 +225,9 @@ if calc_button or "res" in st.session_state:
             (mol_allocated_mass / g_l_mol) * 100.0 if g_l_mol > 0 else 0.0
         )
 
-    # 오차율 계산 (선택한 옵션에 따라)
+    # 절대 차이(%p) 고정
     abs_diff = actual_complex_purity - nominal_complex_purity
-    rel_error = (
-        (abs_diff / nominal_complex_purity) * 100.0
-        if nominal_complex_purity > 0
-        else 0.0
-    )
-
-    if diff_mode == "절대 차이 (%p)":
-        delta_str = f"{abs_diff:+.2f}%p (스펙 대비)"
-    else:
-        delta_str = f"{rel_error:+.2f}% (스펙 대비)"
+    delta_str = f"{abs_diff:+.2f}%p (스펙 대비)"
 
     res = {
         "selected_sources": selected_sources,
@@ -211,7 +236,6 @@ if calc_button or "res" in st.session_state:
         "nominal_complex_purity": nominal_complex_purity,
         "actual_complex_purity": actual_complex_purity,
         "abs_diff": abs_diff,
-        "rel_error": rel_error,
         "delta_str": delta_str,
         "m_suc_meas": m_suc_meas,
         "m_glu_meas": m_glu_meas,
@@ -236,22 +260,31 @@ if calc_button or "res" in st.session_state:
     with col2:
         st.subheader("📊 3. 역산 결과 리포트")
         if complex_source_name != "복합당원":
-            m1, m2 = st.columns(2)
-            m1.metric(
-                f"{complex_source_name} 스펙 당농도",
-                f"{nominal_complex_purity:.2f}%",
-            )
-            m2.metric(
-                f"역산된 {complex_source_name} 실제 당농도",
-                f"{actual_complex_purity:.2f}%",
-                delta=delta_str,
-            )
+            m1, m2 = st.columns([1, 1.3])
+            with m1:
+                st.metric(
+                    f"{complex_source_name} 스펙 당농도",
+                    f"{nominal_complex_purity:.2f}%",
+                )
+            with m2:
+                # 역산된 실제 당농도 카드 형태 강하게 부각 (하이라이트)
+                st.markdown(
+                    f"""
+                    <div class="highlight-card">
+                        <div class="highlight-title">🎯 역산된 {complex_source_name} 실제 당농도</div>
+                        <div class="highlight-value">{actual_complex_purity:.2f}%</div>
+                        <div class="highlight-delta">스펙 대비 차이: {abs_diff:+.2f}%p</div>
+                    </div>
+                """,
+                    unsafe_allow_html=True,
+                )
         else:
             st.metric(
                 "HPLC 실측 총 당농도",
                 f"{res['measured_total_sugar_percent']:.2f}%",
             )
 
+        st.write("")  # 여백
         table_data = []
         if "포도당" in selected_sources:
             table_data.append(
@@ -458,8 +491,8 @@ if calc_button or "res" in st.session_state:
         # Step 4
         st.markdown(
             f"""<div class="step-card">
-            <div class="step-title">[Step 4] 최종 {complex_source_name} 당농도 순도 및 오차 산출 (%)</div>
-            {complex_source_name} 투입량 대비 역산된 당 질량을 통해 실제 농도(순도) 및 스펙 대비 오차율을 최종 계산합니다.
+            <div class="step-title">[Step 4] 최종 {complex_source_name} 당농도 순도 및 차이 산출 (%)</div>
+            {complex_source_name} 투입량 대비 역산된 당 질량을 통해 실제 농도(순도) 및 스펙 대비 차이(%p)를 최종 계산합니다.
         </div>""",
             unsafe_allow_html=True,
         )
@@ -470,4 +503,4 @@ if calc_button or "res" in st.session_state:
                 f"{res['actual_complex_purity']:.2f}%",
             )
         with s4_col2:
-            st.metric("스펙 대비 차이/오차", delta_str)
+            st.metric("스펙 대비 차이", f"{abs_diff:+.2f}%p")
