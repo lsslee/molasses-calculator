@@ -185,7 +185,7 @@ with col_input:
             value=False,
             key="check_auto_ref",
             on_change=update_ref_spec,  # 체크 여부 변경 시 콜백 실행
-            help="체크 시 정제당의 대표 평균 스펙 농도가 자동 작성되고 수정이 제한됩니다.",
+            help="체크 시 정제당의 대표 평균 스펙 농도로 계산됩니다.",
         )
 
         col_ref1, col_ref2, col_ref3 = st.columns(3)
@@ -232,7 +232,7 @@ with col_input:
             value=False,
             key="check_auto_mol",
             on_change=update_mol_spec,  # 체크 여부 변경 시 콜백 실행
-            help="체크 시 당밀의 대표 평균 스펙 농도가 자동 작성되고 수정이 제한됩니다.",
+            help="체크 시 당밀의 대표 평균 스펙 농도로 계산됩니다.",
         )
 
         col_mol1, col_mol2, col_mol3 = st.columns(3)
