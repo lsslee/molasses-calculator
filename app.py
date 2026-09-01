@@ -89,7 +89,7 @@ with col1:
     calc_button = st.button("🚀 당농도 역산 및 리포트 생성", use_container_width=True)
 
 if calc_button or "res" in st.session_state:
-    # 1. 실제 투입량 환산
+    # 1. 실제 투입량 환산 (w/v% -> g/L)
     actual_glu_pct = target_glu * (100.0 / p_glu) if p_glu > 0 else 0
     actual_liq_pct = target_liq * (100.0 / p_liq) if p_liq > 0 else 0
 
@@ -112,10 +112,12 @@ if calc_button or "res" in st.session_state:
     g_l_ref = actual_ref_pct * 10
     g_l_mol = actual_mol_pct * 10
 
-    # 2. HPLC 실측 몰수 계산
+    # 2. HPLC 실측 몰농도 계산 (C6 당 등가 몰수 환산)
     m_suc_meas = (hplc_suc * 10) / MW_SUC
     m_glu_meas = (hplc_glu * 10) / MW_GLU
     m_fru_meas = (hplc_fru * 10) / MW_FRU
+
+    # Sucrose 1몰 = Glucose 1몰 + Fructose 1몰 (2몰의 C6 당 등가 몰수)
     m_total_meas = (m_suc_meas * 2) + m_glu_meas + m_fru_meas
 
     # 단일 당원(포도당, 액당) 기여분 차감
@@ -131,7 +133,6 @@ if calc_button or "res" in st.session_state:
     actual_molasses_purity = 0.0
     error_rate = 0.0
     actual_ref_purity = 0.0
-    ref_error_rate = 0.0
 
     # 복합 당원(당밀/정제당) 역산
     if "당밀" in selected_sources and "정제당" not in selected_sources:
@@ -179,6 +180,21 @@ if calc_button or "res" in st.session_state:
         ),
         "actual_molasses_purity": actual_molasses_purity,
         "error_rate": error_rate,
+        "m_suc_meas": m_suc_meas,
+        "m_glu_meas": m_glu_meas,
+        "m_fru_meas": m_fru_meas,
+        "m_total_meas": m_total_meas,
+        "m_glu_powder": m_glu_powder,
+        "m_liq_contrib": m_liq_contrib,
+        "m_remaining": m_remaining,
+        "actual_glu_pct": actual_glu_pct,
+        "actual_liq_pct": actual_liq_pct,
+        "actual_ref_pct": actual_ref_pct,
+        "actual_mol_pct": actual_mol_pct,
+        "g_l_glu": g_l_glu,
+        "g_l_liq": g_l_liq,
+        "g_l_ref": g_l_ref,
+        "g_l_mol": g_l_mol,
     }
     st.session_state["res"] = res
 
@@ -231,6 +247,60 @@ if calc_button or "res" in st.session_state:
         st.dataframe(df_res, use_container_width=True, hide_index=True)
 
     st.markdown("---")
+
+    # --- 자세한 계산 과정 및 수식 버튼 (EXPANDER) ---
+    with st.expander(
+        "🔍 자세한 계산 과정 및 수식 보기 (클릭 시 펼침)", expanded=False
+    ):
+        st.markdown("### 📐 단계별 역산 계산 메커니즘")
+
+        st.markdown("#### 1단계: 원료별 실제 칭량 투입량 계산 (g/L)")
+        st.latex(
+            r"\text{실제 칭량 투입량 (w/v\%)} = \text{목표 당농도 (w/v\%)} \times \frac{100}{\text{원료 순도/스펙합 (\%)}}"
+        )
+        st.write(
+            f"- **포도당 투입량**: `{res['actual_glu_pct']:.4f} w/v%` (`{res['g_l_glu']:.2f} g/L`)"
+        )
+        st.write(
+            f"- **액당 투입량**: `{res['actual_liq_pct']:.4f} w/v%` (`{res['g_l_liq']:.2f} g/L`)"
+        )
+        st.write(
+            f"- **당밀 투입량**: `{res['actual_mol_pct']:.4f} w/v%` (`{res['g_l_mol']:.2f} g/L`)"
+        )
+
+        st.markdown("#### 2단계: HPLC 실측 당의 C6 등가 몰농도 계산 (mol/L)")
+        st.latex(
+            r"M_{\text{total}} = \left( \frac{\text{HPLC Sucrose} \times 10}{342.30} \times 2 \right) + \frac{\text{HPLC Glucose} \times 10}{180.16} + \frac{\text{HPLC Fructose} \times 10}{180.16}"
+        )
+        st.write(f"- Sucrose 측정 몰농도: `{res['m_suc_meas']:.4f} mol/L`")
+        st.write(f"- Glucose 측정 몰농도: `{res['m_glu_meas']:.4f} mol/L`")
+        st.write(f"- Fructose 측정 몰농도: `{res['m_fru_meas']:.4f} mol/L`")
+        st.write(
+            f"- **HPLC 총 C6 등가 몰농도 ($M_{{total}}$)**: `{res['m_total_meas']:.4f} mol/L`"
+        )
+
+        st.markdown("#### 3단계: 단일 당원(포도당, 액당) 기여 몰농도 차감")
+        st.latex(
+            r"M_{\text{remaining}} = M_{\text{total}} - M_{\text{포도당}} - M_{\text{액당}}"
+        )
+        st.write(f"- 포도당 기여 몰농도: `{res['m_glu_powder']:.4f} mol/L`")
+        st.write(f"- 액당 기여 몰농도: `{res['m_liq_contrib']:.4f} mol/L`")
+        st.write(
+            f"- **차감 후 잔여 복합당(당밀/정제당) 몰농도 ($M_{{remaining}}$)**: `{res['m_remaining']:.4f} mol/L`"
+        )
+
+        st.markdown("#### 4단계: 당밀의 실제 당농도 역산 (%)")
+        st.latex(
+            r"\text{실제 당 질량 (g/L)} = M_{\text{remaining}} \times 180.16"
+        )
+        st.latex(
+            r"\text{역산된 실제 당농도 (\%)} = \left( \frac{\text{실제 당 질량 (g/L)}}{\text{당밀 칭량 투입량 (g/L)}} \right) \times 100"
+        )
+        st.write(
+            f"- **역산된 당밀 실제 당농도**: `{res['actual_molasses_purity']:.2f}%`"
+        )
+        st.write(f"- **스펙 대비 오차율**: `{res['error_rate']:+.2f}%`")
+
     st.subheader("📋 4. 공정 및 당원 특성 리포트")
 
     sources_str = ", ".join(selected_sources)
