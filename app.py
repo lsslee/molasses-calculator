@@ -142,8 +142,12 @@ with col_input:
 
     p_glu = 91.0
     p_liq = 75.0
-    c_ref_suc, c_ref_glu, c_ref_fru = 12.0, 8.0, 5.0
-    c_mol_suc, c_mol_glu, c_mol_fru = 5.8, 8.3, 9.7
+    c_ref_suc, c_ref_glu, c_ref_fru = 6.12, 6.04, 6.36
+    c_mol_suc, c_mol_glu, c_mol_fru = 24.8, 7.0, 8.2
+
+    use_auto_ref_spec = False
+    use_auto_mol_spec = False
+    correction_factor = 1.0
 
     if "포도당" in selected_sources:
         st.subheader("📌 포도당 스펙")
@@ -155,38 +159,64 @@ with col_input:
 
     if "정제당" in selected_sources:
         st.subheader("📌 정제당 스펙")
-        col_ref1, col_ref2, col_ref3 = st.columns(3)
-        with col_ref1:
-            c_ref_suc = st.number_input(
-                "Sucrose (%)", value=12.0, step=0.1, key="ref_suc"
+        use_auto_ref_spec = st.checkbox(
+            "정제당 세부 스펙을 모름 (5개 배치 데이터 평균 스펙 및 재계산된 보정 Factor 1.030 적용)",
+            value=False,
+            key="check_auto_ref",
+        )
+
+        if use_auto_ref_spec:
+            c_ref_suc, c_ref_glu, c_ref_fru = 6.12, 6.04, 6.36
+            correction_factor = 1.030
+            st.info(
+                "ℹ️ 5개 배치 평균 스펙 적용: **Sucrose 6.12%, Glucose 6.04%, Fructose 6.36% (총 18.52%)** / **보정 Factor 1.030** 반영"
             )
-        with col_ref2:
-            c_ref_glu = st.number_input(
-                "Glucose (%)", value=8.0, step=0.1, key="ref_glu"
-            )
-        with col_ref3:
-            c_ref_fru = st.number_input(
-                "Fructose (%)", value=5.0, step=0.1, key="ref_fru"
-            )
+        else:
+            col_ref1, col_ref2, col_ref3 = st.columns(3)
+            with col_ref1:
+                c_ref_suc = st.number_input(
+                    "Sucrose (%)", value=6.12, step=0.1, key="ref_suc"
+                )
+            with col_ref2:
+                c_ref_glu = st.number_input(
+                    "Glucose (%)", value=6.04, step=0.1, key="ref_glu"
+                )
+            with col_ref3:
+                c_ref_fru = st.number_input(
+                    "Fructose (%)", value=6.36, step=0.1, key="ref_fru"
+                )
 
         ref_spec_sum = c_ref_suc + c_ref_glu + c_ref_fru
         st.success(f"🏷️ **정제당 총 스펙 순도**: **{ref_spec_sum:.2f} %**")
 
     if "당밀" in selected_sources:
         st.subheader("📌 당밀 스펙")
-        col_mol1, col_mol2, col_mol3 = st.columns(3)
-        with col_mol1:
-            c_mol_suc = st.number_input(
-                "Sucrose (%)", value=5.8, step=0.1, key="mol_suc"
+        use_auto_mol_spec = st.checkbox(
+            "당밀 세부 스펙을 모름 (배치 분석 데이터 스펙 및 보정 Factor 1.031 적용)",
+            value=False,
+            key="check_auto_mol",
+        )
+
+        if use_auto_mol_spec:
+            c_mol_suc, c_mol_glu, c_mol_fru = 24.8, 7.0, 8.2
+            correction_factor = 1.031
+            st.info(
+                "ℹ️ 배치 데이터 스펙 적용: **Sucrose 24.8%, Glucose 7.0%, Fructose 8.2% (총 40.0%)** / **보정 Factor 1.031** 반영"
             )
-        with col_mol2:
-            c_mol_glu = st.number_input(
-                "Glucose (%)", value=8.3, step=0.1, key="mol_glu"
-            )
-        with col_mol3:
-            c_mol_fru = st.number_input(
-                "Fructose (%)", value=9.7, step=0.1, key="mol_fru"
-            )
+        else:
+            col_mol1, col_mol2, col_mol3 = st.columns(3)
+            with col_mol1:
+                c_mol_suc = st.number_input(
+                    "Sucrose (%)", value=24.8, step=0.1, key="mol_suc"
+                )
+            with col_mol2:
+                c_mol_glu = st.number_input(
+                    "Glucose (%)", value=7.0, step=0.1, key="mol_glu"
+                )
+            with col_mol3:
+                c_mol_fru = st.number_input(
+                    "Fructose (%)", value=8.2, step=0.1, key="mol_fru"
+                )
 
         mol_spec_sum = c_mol_suc + c_mol_glu + c_mol_fru
         st.success(f"🏷️ **당밀 총 스펙 순도**: **{mol_spec_sum:.2f} %**")
@@ -259,6 +289,7 @@ if calc_button or "res" in st.session_state:
     # 복합 당원 명칭 및 역산
     complex_source_name = "복합당원"
     nominal_complex_purity = 0.0
+    raw_actual_purity = 0.0
     actual_complex_purity = 0.0
     g_l_complex = 0.0
 
@@ -267,17 +298,19 @@ if calc_button or "res" in st.session_state:
         nominal_complex_purity = ref_nominal_total
         g_l_complex = g_l_ref
         c_ref_actual_mass = m_remaining * MW_GLU
-        actual_complex_purity = (
+        raw_actual_purity = (
             (c_ref_actual_mass / g_l_ref) * 100.0 if g_l_ref > 0 else 0.0
         )
+        actual_complex_purity = raw_actual_purity * correction_factor
     elif "당밀" in selected_sources and "정제당" not in selected_sources:
         complex_source_name = "당밀"
         nominal_complex_purity = mol_nominal_total
         g_l_complex = g_l_mol
         c_mol_actual_mass = m_remaining * MW_GLU
-        actual_complex_purity = (
+        raw_actual_purity = (
             (c_mol_actual_mass / g_l_mol) * 100.0 if g_l_mol > 0 else 0.0
         )
+        actual_complex_purity = raw_actual_purity * correction_factor
 
     abs_diff = actual_complex_purity - nominal_complex_purity
 
@@ -313,7 +346,9 @@ if calc_button or "res" in st.session_state:
         "measured_total_sugar_percent": total_measured_sugar,
         "complex_source_name": complex_source_name,
         "nominal_complex_purity": nominal_complex_purity,
+        "raw_actual_purity": raw_actual_purity,
         "actual_complex_purity": actual_complex_purity,
+        "correction_factor": correction_factor,
         "abs_diff": abs_diff,
         "m_suc_meas": m_suc_meas,
         "m_glu_meas": m_glu_meas,
@@ -348,10 +383,15 @@ if calc_button or "res" in st.session_state:
                     f"{nominal_complex_purity:.2f}%",
                 )
             with m2:
+                factor_text = (
+                    f" (보정 Factor {correction_factor} 적용)"
+                    if correction_factor > 1.0
+                    else ""
+                )
                 st.markdown(
                     f"""
                     <div class="highlight-card">
-                        <div class="highlight-title">🎯 역산된 {complex_source_name} 실제 당농도</div>
+                        <div class="highlight-title">🎯 역산된 {complex_source_name} 실제 당농도{factor_text}</div>
                         <div class="highlight-value">{actual_complex_purity:.2f}%</div>
                         <div class="highlight-delta">스펙 대비 차이: {abs_diff:+.2f}%p</div>
                     </div>
@@ -647,7 +687,7 @@ if calc_button or "res" in st.session_state:
         st.markdown(
             f"""<div class="step-card">
             <div class="step-title">[Step 4] 최종 {complex_source_name} 당농도 순도 및 차이 산출 (%)</div>
-            {complex_source_name} 투입량 대비 역산된 당 질량을 통해 실제 농도(순도) 및 스펙 대비 차이(%p)를 최종 계산합니다.
+            {complex_source_name} 투입량 대비 역산된 당 질량을 통해 실제 농도(순도) 및 스펙 대비 차이(%p)를 최종 계산합니다. (보정 Factor {res['correction_factor']} 반영)
         </div>""",
             unsafe_allow_html=True,
         )
