@@ -198,6 +198,7 @@ if calc_button or "res" in st.session_state:
     }
     st.session_state["res"] = res
 
+    # --- 3. 역산 결과 리포트 (우측 칼럼) ---
     with col2:
         st.subheader("📊 3. 역산 결과 리포트")
         if "당밀" in selected_sources:
@@ -248,7 +249,35 @@ if calc_button or "res" in st.session_state:
 
     st.markdown("---")
 
-    # --- 자세한 계산 과정 및 수식 버튼 (EXPANDER) ---
+    # --- 4. 공정 및 당원 특성 리포트 ---
+    st.subheader("📋 4. 공정 및 당원 특성 리포트")
+
+    sources_str = ", ".join(selected_sources)
+    st.markdown(f"- **선택된 당원 구성**: `{sources_str}`")
+
+    if hplc_suc == 0:
+        hydro_text = "HPLC 분석 결과 Sucrose가 전혀 검출되지 않았습니다(0%). 멸균 및 조제 과정에서 **Sucrose가 100% 완전 가수분해(Glucose + Fructose)**되었습니다."
+    else:
+        hydro_text = f"Sucrose 실측값이 {hplc_suc:.2f}% 잔류하고 있습니다. 열처리 조건에 따라 부분 가수분해된 상태입니다."
+
+    st.markdown(f"- **Sucrose 가수분해 평가**: {hydro_text}")
+
+    if "당밀" in selected_sources or "정제당" in selected_sources:
+        if abs(error_rate) <= 5.0:
+            eval_msg = f"실효 당농도가 스펙 범위 내에서 안정적으로 유지되고 있습니다 (오차 {error_rate:+.2f}%)."
+        elif error_rate > 5.0:
+            eval_msg = f"실효 당농도가 스펙 대비 {error_rate:+.2f}% 높게 측정되었습니다. 원료 농축 상태 또는 칭량 오차를 확인하십시오."
+        else:
+            eval_msg = f"실효 당농도가 스펙 대비 {error_rate:+.2f}% 낮게 측정되었습니다. 수분 흡습 또는 열열화 가능성이 있습니다."
+        st.markdown(f"- **복합 당원 품질 변동 분석**: {eval_msg}")
+
+    st.markdown(
+        "- **배지 조제 권고사항**: 선택된 당원의 투입 비율과 HPLC 측정된 당 조성 결과를 반영하여 차기 배지 칭량 레시피를 보정하십시오."
+    )
+
+    st.markdown("---")
+
+    # --- 5. 자세한 계산 과정 및 수식 (최하단에 배치) ---
     with st.expander(
         "🔍 자세한 계산 과정 및 수식 보기 (클릭 시 펼침)", expanded=False
     ):
@@ -300,28 +329,3 @@ if calc_button or "res" in st.session_state:
             f"- **역산된 당밀 실제 당농도**: `{res['actual_molasses_purity']:.2f}%`"
         )
         st.write(f"- **스펙 대비 오차율**: `{res['error_rate']:+.2f}%`")
-
-    st.subheader("📋 4. 공정 및 당원 특성 리포트")
-
-    sources_str = ", ".join(selected_sources)
-    st.markdown(f"- **선택된 당원 구성**: `{sources_str}`")
-
-    if hplc_suc == 0:
-        hydro_text = "HPLC 분석 결과 Sucrose가 전혀 검출되지 않았습니다(0%). 멸균 및 조제 과정에서 **Sucrose가 100% 완전 가수분해(Glucose + Fructose)**되었습니다."
-    else:
-        hydro_text = f"Sucrose 실측값이 {hplc_suc:.2f}% 잔류하고 있습니다. 열처리 조건에 따라 부분 가수분해된 상태입니다."
-
-    st.markdown(f"- **Sucrose 가수분해 평가**: {hydro_text}")
-
-    if "당밀" in selected_sources or "정제당" in selected_sources:
-        if abs(error_rate) <= 5.0:
-            eval_msg = f"실효 당농도가 스펙 범위 내에서 안정적으로 유지되고 있습니다 (오차 {error_rate:+.2f}%)."
-        elif error_rate > 5.0:
-            eval_msg = f"실효 당농도가 스펙 대비 {error_rate:+.2f}% 높게 측정되었습니다. 원료 농축 상태 또는 칭량 오차를 확인하십시오."
-        else:
-            eval_msg = f"실효 당농도가 스펙 대비 {error_rate:+.2f}% 낮게 측정되었습니다. 수분 흡습 또는 열열화 가능성이 있습니다."
-        st.markdown(f"- **복합 당원 품질 변동 분석**: {eval_msg}")
-
-    st.markdown(
-        "- **배지 조제 권고사항**: 선택된 당원의 투입 비율과 HPLC 측정된 당 조성 결과를 반영하여 차기 배지 칭량 레시피를 보정하십시오."
-    )
