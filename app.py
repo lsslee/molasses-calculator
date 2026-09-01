@@ -115,7 +115,9 @@ with col_input:
 
     source_ratios = {}
     if selected_sources:
-        st.caption("선택한 당원들의 투입 비율을 입력하세요. (자동 정규화 환산됩니다)")
+        st.caption(
+            "선택한 당원들의 비율을 입력하면 백분율환산 및 목표 총당 대비 당농도가 표시됩니다."
+        )
         ratio_cols = st.columns(len(selected_sources))
         default_ratio = round(100.0 / len(selected_sources), 1)
 
@@ -130,13 +132,19 @@ with col_input:
 
         total_ratio_sum = sum(source_ratios.values())
         if total_ratio_sum > 0:
-            ratio_str = " : ".join(
-                [
-                    f"{src} {val/total_ratio_sum*100:.1f}%"
-                    for src, val in source_ratios.items()
-                ]
+            ratio_details = []
+            sugar_breakdown = []
+            for src, val in source_ratios.items():
+                pct = (val / total_ratio_sum) * 100
+                calc_sugar = target_total_sugar * (pct / 100)
+                ratio_details.append(f"**{src}**: {pct:.1f}%")
+                sugar_breakdown.append(f"{src} {calc_sugar:.2f}%")
+
+            st.info(f"💡 **당원 간 구성 비율**: {' | '.join(ratio_details)}")
+            st.success(
+                f"🎯 **목표 총당({target_total_sugar:.1f}%) 내 당원별 담당 농도**: "
+                + " + ".join(sugar_breakdown)
             )
-            st.info(f"💡 **환산 비율**: {ratio_str}")
         else:
             st.warning("⚠️ 비율의 합이 0보다 커야 합니다.")
     else:
@@ -305,21 +313,39 @@ if calc_button or "res" in st.session_state:
         actual_complex_purity = (
             (c_mol_actual_mass / g_l_mol) * 100.0 if g_l_mol > 0 else 0.0
         )
-    elif "당밀" in selected_sources and "정제당" in selected_sources:
-        complex_source_name = "당밀/정제당"
-        nominal_complex_purity = mol_nominal_total
-        g_l_complex = g_l_mol
-        mol_share = target_mol / (target_mol + target_ref)
-        mol_allocated_mass = (m_remaining * MW_GLU) * mol_share
-        actual_complex_purity = (
-            (mol_allocated_mass / g_l_mol) * 100.0 if g_l_mol > 0 else 0.0
-        )
 
     abs_diff = actual_complex_purity - nominal_complex_purity
 
+    # 역산된 당농도 기반의 실제 각 당원별 기여농도(w/v%) 및 비중(%) 계산
+    real_sugar_contributions = {}
+    total_measured_sugar = hplc_suc + hplc_glu + hplc_fru
+
+    if "포도당" in selected_sources:
+        real_sugar_contributions["포도당"] = actual_glu_pct * (p_glu / 100.0)
+    if "액당" in selected_sources:
+        real_sugar_contributions["액당"] = actual_liq_pct * (p_liq / 100.0)
+    if "정제당" in selected_sources:
+        real_sugar_contributions["정제당"] = actual_ref_pct * (
+            actual_complex_purity / 100.0
+            if complex_source_name == "정제당"
+            else ref_nominal_total / 100.0
+        )
+    if "당밀" in selected_sources:
+        real_sugar_contributions["당밀"] = actual_mol_pct * (
+            actual_complex_purity / 100.0
+            if complex_source_name == "당밀"
+            else mol_nominal_total / 100.0
+        )
+
+    calc_total_real_sugar = sum(real_sugar_contributions.values())
+    real_sugar_shares = {}
+    if calc_total_real_sugar > 0:
+        for src, val in real_sugar_contributions.items():
+            real_sugar_shares[src] = (val / calc_total_real_sugar) * 100
+
     res = {
         "selected_sources": selected_sources,
-        "measured_total_sugar_percent": hplc_suc + hplc_glu + hplc_fru,
+        "measured_total_sugar_percent": total_measured_sugar,
         "complex_source_name": complex_source_name,
         "nominal_complex_purity": nominal_complex_purity,
         "actual_complex_purity": actual_complex_purity,
@@ -340,6 +366,8 @@ if calc_button or "res" in st.session_state:
         "g_l_ref": g_l_ref,
         "g_l_mol": g_l_mol,
         "g_l_complex": g_l_complex,
+        "real_sugar_contributions": real_sugar_contributions,
+        "real_sugar_shares": real_sugar_shares,
     }
     st.session_state["res"] = res
 
@@ -372,29 +400,62 @@ if calc_button or "res" in st.session_state:
             )
 
         st.write("")
+        st.markdown("##### 📌 실제 역산 기반 당원별 기여 농도 및 비중")
+
         table_data = []
         if "포도당" in selected_sources:
             table_data.append(
-                ["포도당 실제 칭량 투입량", f"{actual_glu_pct:.4f} %"]
+                [
+                    "포도당",
+                    f"{actual_glu_pct:.4f} %",
+                    f"{real_sugar_contributions.get('포도당', 0):.2f} %",
+                    f"{real_sugar_shares.get('포도당', 0):.1f} %",
+                ]
             )
         if "액당" in selected_sources:
             table_data.append(
-                ["액당 실제 칭량 투입량", f"{actual_liq_pct:.4f} %"]
+                [
+                    "액당",
+                    f"{actual_liq_pct:.4f} %",
+                    f"{real_sugar_contributions.get('액당', 0):.2f} %",
+                    f"{real_sugar_shares.get('액당', 0):.1f} %",
+                ]
             )
         if "정제당" in selected_sources:
             table_data.append(
-                ["정제당 실제 칭량 투입량", f"{actual_ref_pct:.4f} %"]
+                [
+                    "정제당",
+                    f"{actual_ref_pct:.4f} %",
+                    f"{real_sugar_contributions.get('정제당', 0):.2f} %",
+                    f"{real_sugar_shares.get('정제당', 0):.1f} %",
+                ]
             )
         if "당밀" in selected_sources:
             table_data.append(
-                ["당밀 실제 칭량 투입량", f"{actual_mol_pct:.4f} %"]
+                [
+                    "당밀",
+                    f"{actual_mol_pct:.4f} %",
+                    f"{real_sugar_contributions.get('당밀', 0):.2f} %",
+                    f"{real_sugar_shares.get('당밀', 0):.1f} %",
+                ]
             )
-        table_data.append(
-            ["HPLC 실측 총 당농도", f"{res['measured_total_sugar_percent']:.2f} %"]
-        )
 
-        df_res = pd.DataFrame(table_data, columns=["항목", "수치"])
+        df_res = pd.DataFrame(
+            table_data,
+            columns=[
+                "당원",
+                "칭량 투입량(w/v%)",
+                "실제 기여 당농도(w/v%)",
+                "실제 총당 내 비중(%)",
+            ],
+        )
         st.dataframe(df_res, use_container_width=True, hide_index=True)
+
+        if real_sugar_shares:
+            share_summary = " : ".join(
+                [f"{src} {val:.1f}%" for src, val in real_sugar_shares.items()]
+            )
+            st.info(f"💡 **실제 역산 기반 당원별 구성 비중**: {share_summary}")
 
         st.markdown("---")
         st.subheader("📋 공정 및 당원 특성 리포트")
@@ -424,7 +485,7 @@ if calc_button or "res" in st.session_state:
     st.markdown("---")
 
     # ---------------------------------------------------------
-    # Section 7. Step별 상세 계산 과정 토글 영역 (복원 완료)
+    # Section 7. Step별 상세 계산 과정 토글 영역
     # ---------------------------------------------------------
     with st.expander(
         "🔍 자세한 Step별 계산 과정 및 데이터 보기 (클릭 시 펼침)",
