@@ -3,154 +3,80 @@ import streamlit as st
 
 # --- PAGE CONFIG ---
 st.set_page_config(
-    page_title="당밀류 원료 당농도 역산 계산기", page_icon="🧪", layout="wide"
+    page_title="다중 당원 배지 당농도 역산 & 분석 시스템",
+    page_icon="🧪",
+    layout="wide",
 )
 
-# --- CORE LOGIC ---
+# --- CORE CONSTANTS ---
 MW_GLU = 180.16
 MW_FRU = 180.16
 MW_SUC = 342.30
 
-
-def calculate_molasses_purity(
-    target_glu,
-    target_mol,
-    p_glu,
-    c_mol_suc,
-    c_mol_glu,
-    c_mol_fru,
-    hplc_suc,
-    hplc_glu,
-    hplc_fru,
-):
-    c_mol_nominal_total = c_mol_suc + c_mol_glu + c_mol_fru
-    w_glu_actual_percent = target_glu * (100.0 / p_glu) if p_glu > 0 else 0
-    w_mol_actual_percent = (
-        target_mol * (100.0 / c_mol_nominal_total)
-        if c_mol_nominal_total > 0
-        else 0
-    )
-
-    w_glu_actual_g_l = w_glu_actual_percent * 10
-    w_mol_actual_g_l = w_mol_actual_percent * 10
-
-    m_glu_powder = (w_glu_actual_g_l * (p_glu / 100.0)) / MW_GLU
-
-    m_suc_meas = (hplc_suc * 10) / MW_SUC
-    m_glu_meas = (hplc_glu * 10) / MW_GLU
-    m_fru_meas = (hplc_fru * 10) / MW_FRU
-
-    m_total_meas = (m_suc_meas * 2) + m_glu_meas + m_fru_meas
-    m_mol_actual = max(0.0, m_total_meas - m_glu_powder)
-
-    c_mol_actual_mass_g_l = m_mol_actual * MW_GLU
-    actual_molasses_purity = (
-        (c_mol_actual_mass_g_l / w_mol_actual_g_l) * 100.0
-        if w_mol_actual_g_l > 0
-        else 0.0
-    )
-    error_rate = (
-        ((actual_molasses_purity - c_mol_nominal_total) / c_mol_nominal_total)
-        * 100.0
-        if c_mol_nominal_total > 0
-        else 0.0
-    )
-
-    return {
-        "actual_glu_input_percent": w_glu_actual_percent,
-        "actual_mol_input_percent": w_mol_actual_percent,
-        "measured_total_sugar_percent": hplc_suc + hplc_glu + hplc_fru,
-        "m_glu_powder": m_glu_powder,
-        "m_mol_actual": m_mol_actual,
-        "c_mol_actual_mass_g_l": c_mol_actual_mass_g_l,
-        "nominal_molasses_purity": c_mol_nominal_total,
-        "actual_molasses_purity": actual_molasses_purity,
-        "error_rate": error_rate,
-    }
-
-
-def generate_rule_based_report(
-    res, hplc_suc, hplc_glu, hplc_fru, c_mol_suc, raw_material_type
-):
-    nominal = res["nominal_molasses_purity"]
-    actual = res["actual_molasses_purity"]
-    error = res["error_rate"]
-
-    # 1. 원인 분석
-    if abs(error) <= 5.0:
-        cause_analysis = (
-            f"역산된 실제 당농도({actual:.2f}%)가 스펙({nominal:.2f}%) 대비 "
-            f"오차 범위 내({error:+.2f}%)로 안정적입니다. {raw_material_type} 원료의 품질 변동성이 적습니다."
-        )
-    elif error > 5.0:
-        cause_analysis = (
-            f"역산된 실제 당농도({actual:.2f}%)가 스펙({nominal:.2f}%) 대비 "
-            f"{error:+.2f}% 높게 측정되었습니다. 원료의 농축/건조에 따른 당 함량 증가 또는 칭량 과정의 오차 가능성이 있습니다."
-        )
-    else:
-        cause_analysis = (
-            f"역산된 실제 당농도({actual:.2f}%)가 스펙({nominal:.2f}%) 대비 "
-            f"{error:+.2f}% 낮게 측정되었습니다. {raw_material_type}의 실효 당 함량 감소, 수분 흡습 또는 보관 중 열열화 가능성이 있습니다."
-        )
-
-    # 2. Sucrose 가수분해 평가
-    if hplc_suc == 0:
-        hydrolysis_eval = (
-            "HPLC 분석 결과 Sucrose가 전혀 검출되지 않았습니다(0%). "
-            "멸균 과정 또는 산/열 조건에 의해 **Sucrose가 100% 완전 가수분해(Glucose + Fructose)**된 상태입니다."
-        )
-    else:
-        hydrolysis_eval = (
-            f"Sucrose 실측값이 {hplc_suc:.2f}%로 일부 잔류하고 있습니다. "
-            "열처리/멸균 조건에 따라 분해가 완결되지 않았으며, 미생물의 소화/이용 속도 차이에 영향을 줄 수 있습니다."
-        )
-
-    # 3. 원료 특성별 리포트 (당밀 vs 정제당밀)
-    if raw_material_type == "일반 당밀":
-        molasses_info = (
-            "📌 **일반 당밀(Molasses) 특성 가이드**:\n"
-            "- 일반 당밀은 미네랄, 회분(Ash), 유기산 및 비당류 고형분이 포함되어 있어 멸균 시 메일라드(Maillard) 갈변 반응이 활발합니다.\n"
-            "- 당 수치 외에 미네랄 함량에 의한 멸균 후 pH 변화 및 발효 저해 요소 점검이 권장됩니다."
-        )
-    else:
-        molasses_info = (
-            "📌 **정제당밀(Refined Molasses) 특성 가이드**:\n"
-            "- 정제 공정을 거쳐 회분 및 탈색 처리가 완료된 원료로, 일반 당밀 대비 열열화 부반응 위험이 낮습니다.\n"
-            "- 당 조성(Suc/Glc/Fru)의 일관성이 비교적 높으므로 오차 발생 시 칭량 조건 및 수분 함량(Brix)을 우선 확인하십시오."
-        )
-
-    # 4. 권고사항
-    if abs(error) > 10.0:
-        recommendation = f"⚠️ {raw_material_type} 당농도 오차율이 10%를 초과합니다. 원료 LOT 재검수 및 Brix/HPLC 재분석을 권장합니다."
-    else:
-        recommendation = "✅ 현 역산 수치를 바탕으로 차기 배지 조제 시 칭량 기준 스펙을 최적화하여 업데이트하십시오."
-
-    return cause_analysis, hydrolysis_eval, molasses_info, recommendation
-
-
 # --- UI LAYOUT ---
-st.title("🧪 당밀류 원료 당농도 역산 & 자동 분석 시스템")
+st.title("🧪 다중 당원 배지 당농도 역산 & 자동 분석 시스템")
 st.markdown(
-    "당밀 및 정제당밀의 배지 조제 조건과 HPLC 실측 결과를 바탕으로 **원료의 실효 당농도**를 역산합니다."
+    "사용하는 당원을 자유롭게 선택하고, HPLC 실측 결과와 비교하여 **원료별 실효 당농도 및 오차**를 역산합니다."
 )
 
-st.sidebar.header("📋 1. 원료 및 배지 목표 설정")
-raw_material_type = st.sidebar.selectbox(
-    "사용 원료 유형 선택", ["정제당밀", "일반 당밀"], index=0
+st.sidebar.header("📋 1. 당원 선택 및 배지 목표 설정")
+selected_sources = st.sidebar.multiselect(
+    "사용할 당원 선택 (중복 선택 가능)",
+    ["포도당", "액당", "정제당", "당밀"],
+    default=["포도당", "당밀"],
 )
 
-target_glu = st.sidebar.number_input(
-    "포도당 목표 당농도 (w/v%)", value=3.35, step=0.1
-)
-target_mol = st.sidebar.number_input(
-    f"{raw_material_type} 목표 당농도 (w/v%)", value=3.35, step=0.1
-)
-p_glu = st.sidebar.number_input("포도당 원료 순도 (%)", value=91.0, step=0.1)
+# 기본값 초기화
+target_glu, p_glu = 0.0, 91.0
+target_liq, p_liq = 0.0, 75.0
+target_ref, c_ref_suc, c_ref_glu, c_ref_fru = 0.0, 99.0, 0.5, 0.5
+target_mol, c_mol_suc, c_mol_glu, c_mol_fru = 3.35, 5.8, 8.3, 9.7
 
-st.sidebar.subheader(f"{raw_material_type} 스펙 (%)")
-c_mol_suc = st.sidebar.number_input("Sucrose 스펙 (%)", value=5.8, step=0.1)
-c_mol_glu = st.sidebar.number_input("Glucose 스펙 (%)", value=8.3, step=0.1)
-c_mol_fru = st.sidebar.number_input("Fructose 스펙 (%)", value=9.7, step=0.1)
+if "포도당" in selected_sources:
+    st.sidebar.subheader("포도당 설정")
+    target_glu = st.sidebar.number_input(
+        "포도당 목표 당농도 (w/v%)", value=3.35, step=0.1
+    )
+    p_glu = st.sidebar.number_input("포도당 순도 (%)", value=91.0, step=0.1)
+
+if "액당" in selected_sources:
+    st.sidebar.subheader("액당 설정")
+    target_liq = st.sidebar.number_input(
+        "액당 목표 당농도 (w/v%)", value=3.35, step=0.1
+    )
+    p_liq = st.sidebar.number_input(
+        "액당 순도/고형분 (%)", value=75.0, step=0.1
+    )
+
+if "정제당" in selected_sources:
+    st.sidebar.subheader("정제당 스펙 및 목표")
+    target_ref = st.sidebar.number_input(
+        "정제당 목표 당농도 (w/v%)", value=3.35, step=0.1
+    )
+    c_ref_suc = st.sidebar.number_input(
+        "정제당 Sucrose 스펙 (%)", value=99.0, step=0.1
+    )
+    c_ref_glu = st.sidebar.number_input(
+        "정제당 Glucose 스펙 (%)", value=0.5, step=0.1
+    )
+    c_ref_fru = st.sidebar.number_input(
+        "정제당 Fructose 스펙 (%)", value=0.5, step=0.1
+    )
+
+if "당밀" in selected_sources:
+    st.sidebar.subheader("당밀 스펙 및 목표")
+    target_mol = st.sidebar.number_input(
+        "당밀 목표 당농도 (w/v%)", value=3.35, step=0.1
+    )
+    c_mol_suc = st.sidebar.number_input(
+        "당밀 Sucrose 스펙 (%)", value=5.8, step=0.1
+    )
+    c_mol_glu = st.sidebar.number_input(
+        "당밀 Glucose 스펙 (%)", value=8.3, step=0.1
+    )
+    c_mol_fru = st.sidebar.number_input(
+        "당밀 Fructose 스펙 (%)", value=9.7, step=0.1
+    )
 
 col1, col2 = st.columns([1, 1])
 
@@ -163,62 +89,169 @@ with col1:
     calc_button = st.button("🚀 당농도 역산 및 리포트 생성", use_container_width=True)
 
 if calc_button or "res" in st.session_state:
-    res = calculate_molasses_purity(
-        target_glu,
-        target_mol,
-        p_glu,
-        c_mol_suc,
-        c_mol_glu,
-        c_mol_fru,
-        hplc_suc,
-        hplc_glu,
-        hplc_fru,
+    # 1. 실제 투입량 환산
+    actual_glu_pct = target_glu * (100.0 / p_glu) if p_glu > 0 else 0
+    actual_liq_pct = target_liq * (100.0 / p_liq) if p_liq > 0 else 0
+
+    ref_nominal_total = c_ref_suc + c_ref_glu + c_ref_fru
+    actual_ref_pct = (
+        target_ref * (100.0 / ref_nominal_total)
+        if ref_nominal_total > 0
+        else 0
     )
+
+    mol_nominal_total = c_mol_suc + c_mol_glu + c_mol_fru
+    actual_mol_pct = (
+        target_mol * (100.0 / mol_nominal_total)
+        if mol_nominal_total > 0
+        else 0
+    )
+
+    g_l_glu = actual_glu_pct * 10
+    g_l_liq = actual_liq_pct * 10
+    g_l_ref = actual_ref_pct * 10
+    g_l_mol = actual_mol_pct * 10
+
+    # 2. HPLC 실측 몰수 계산
+    m_suc_meas = (hplc_suc * 10) / MW_SUC
+    m_glu_meas = (hplc_glu * 10) / MW_GLU
+    m_fru_meas = (hplc_fru * 10) / MW_FRU
+    m_total_meas = (m_suc_meas * 2) + m_glu_meas + m_fru_meas
+
+    # 단일 당원(포도당, 액당) 기여분 차감
+    m_glu_powder = (
+        (g_l_glu * (p_glu / 100.0)) / MW_GLU if "포도당" in selected_sources else 0
+    )
+    m_liq_contrib = (
+        (g_l_liq * (p_liq / 100.0)) / MW_GLU if "액당" in selected_sources else 0
+    )
+
+    m_remaining = max(0.0, m_total_meas - m_glu_powder - m_liq_contrib)
+
+    actual_molasses_purity = 0.0
+    error_rate = 0.0
+    actual_ref_purity = 0.0
+    ref_error_rate = 0.0
+
+    # 복합 당원(당밀/정제당) 역산
+    if "당밀" in selected_sources and "정제당" not in selected_sources:
+        c_mol_actual_mass_g_l = m_remaining * MW_GLU
+        actual_molasses_purity = (
+            (c_mol_actual_mass_g_l / g_l_mol) * 100.0 if g_l_mol > 0 else 0.0
+        )
+        error_rate = (
+            ((actual_molasses_purity - mol_nominal_total) / mol_nominal_total)
+            * 100.0
+            if mol_nominal_total > 0
+            else 0.0
+        )
+    elif "정제당" in selected_sources and "당밀" not in selected_sources:
+        c_ref_actual_mass_g_l = m_remaining * MW_GLU
+        actual_ref_purity = (
+            (c_ref_actual_mass_g_l / g_l_ref) * 100.0 if g_l_ref > 0 else 0.0
+        )
+        error_rate = (
+            ((actual_ref_purity - ref_nominal_total) / ref_nominal_total)
+            * 100.0
+            if ref_nominal_total > 0
+            else 0.0
+        )
+    elif "당밀" in selected_sources and "정제당" in selected_sources:
+        total_complex = target_mol + target_ref
+        if total_complex > 0:
+            mol_share = target_mol / total_complex
+            mol_allocated_mass = (m_remaining * MW_GLU) * mol_share
+            actual_molasses_purity = (
+                (mol_allocated_mass / g_l_mol) * 100.0 if g_l_mol > 0 else 0.0
+            )
+            error_rate = (
+                ((actual_molasses_purity - mol_nominal_total) / mol_nominal_total)
+                * 100.0
+                if mol_nominal_total > 0
+                else 0.0
+            )
+
+    res = {
+        "selected_sources": selected_sources,
+        "measured_total_sugar_percent": hplc_suc + hplc_glu + hplc_fru,
+        "nominal_molasses_purity": (
+            mol_nominal_total if "당밀" in selected_sources else 0
+        ),
+        "actual_molasses_purity": actual_molasses_purity,
+        "error_rate": error_rate,
+    }
     st.session_state["res"] = res
 
     with col2:
         st.subheader("📊 3. 역산 결과 리포트")
-        m1, m2 = st.columns(2)
-        m1.metric(
-            f"{raw_material_type} 스펙 당농도",
-            f"{res['nominal_molasses_purity']:.2f}%",
-        )
-        m2.metric(
-            f"역산된 {raw_material_type} 실제 당농도",
-            f"{res['actual_molasses_purity']:.2f}%",
-            delta=f"{res['error_rate']:.2f}% (스펙 대비)",
+        if "당밀" in selected_sources:
+            m1, m2 = st.columns(2)
+            m1.metric("당밀 스펙 당농도", f"{mol_nominal_total:.2f}%")
+            m2.metric(
+                "역산된 당밀 실제 당농도",
+                f"{actual_molasses_purity:.2f}%",
+                delta=f"{error_rate:.2f}% (스펙 대비)",
+            )
+        elif "정제당" in selected_sources:
+            m1, m2 = st.columns(2)
+            m1.metric("정제당 스펙 당농도", f"{ref_nominal_total:.2f}%")
+            m2.metric(
+                "역산된 정제당 실제 당농도",
+                f"{actual_ref_purity:.2f}%",
+                delta=f"{error_rate:.2f}% (스펙 대비)",
+            )
+        else:
+            st.metric(
+                "HPLC 실측 총 당농도",
+                f"{res['measured_total_sugar_percent']:.2f}%",
+            )
+
+        table_data = []
+        if "포도당" in selected_sources:
+            table_data.append(
+                ["포도당 실제 칭량 투입량", f"{actual_glu_pct:.4f} %"]
+            )
+        if "액당" in selected_sources:
+            table_data.append(
+                ["액당 실제 칭량 투입량", f"{actual_liq_pct:.4f} %"]
+            )
+        if "정제당" in selected_sources:
+            table_data.append(
+                ["정제당 실제 칭량 투입량", f"{actual_ref_pct:.4f} %"]
+            )
+        if "당밀" in selected_sources:
+            table_data.append(
+                ["당밀 실제 칭량 투입량", f"{actual_mol_pct:.4f} %"]
+            )
+        table_data.append(
+            ["HPLC 실측 총 당농도", f"{res['measured_total_sugar_percent']:.2f} %"]
         )
 
-        df_res = pd.DataFrame(
-            {
-                "항목": [
-                    "포도당 실제 칭량 투입량",
-                    f"{raw_material_type} 실제 칭량 투입량",
-                    "포도당 유래 몰농도",
-                    f"{raw_material_type} 유래 실효 몰농도",
-                    f"배지 내 {raw_material_type} 당 질량",
-                    "HPLC 실측 총 당농도",
-                ],
-                "수치": [
-                    f"{res['actual_glu_input_percent']:.4f} %",
-                    f"{res['actual_mol_input_percent']:.4f} %",
-                    f"{res['m_glu_powder']:.4f} mol/L",
-                    f"{res['m_mol_actual']:.4f} mol/L",
-                    f"{res['c_mol_actual_mass_g_l']:.2f} g/L",
-                    f"{res['measured_total_sugar_percent']:.2f} %",
-                ],
-            }
-        )
+        df_res = pd.DataFrame(table_data, columns=["항목", "수치"])
         st.dataframe(df_res, use_container_width=True, hide_index=True)
 
     st.markdown("---")
-    st.subheader("📋 4. 공정 및 원료 특성 리포트")
+    st.subheader("📋 4. 공정 및 당원 특성 리포트")
 
-    cause, hydro, mol_info, reco = generate_rule_based_report(
-        res, hplc_suc, hplc_glu, hplc_fru, c_mol_suc, raw_material_type
+    sources_str = ", ".join(selected_sources)
+    st.markdown(f"- **선택된 당원 구성**: `{sources_str}`")
+
+    if hplc_suc == 0:
+        hydro_text = "HPLC 분석 결과 Sucrose가 전혀 검출되지 않았습니다(0%). 멸균 및 조제 과정에서 **Sucrose가 100% 완전 가수분해(Glucose + Fructose)**되었습니다."
+    else:
+        hydro_text = f"Sucrose 실측값이 {hplc_suc:.2f}% 잔류하고 있습니다. 열처리 조건에 따라 부분 가수분해된 상태입니다."
+
+    st.markdown(f"- **Sucrose 가수분해 평가**: {hydro_text}")
+
+    if "당밀" in selected_sources or "정제당" in selected_sources:
+        if abs(error_rate) <= 5.0:
+            eval_msg = f"실효 당농도가 스펙 범위 내에서 안정적으로 유지되고 있습니다 (오차 {error_rate:+.2f}%)."
+        elif error_rate > 5.0:
+            eval_msg = f"실효 당농도가 스펙 대비 {error_rate:+.2f}% 높게 측정되었습니다. 원료 농축 상태 또는 칭량 오차를 확인하십시오."
+        else:
+            eval_msg = f"실효 당농도가 스펙 대비 {error_rate:+.2f}% 낮게 측정되었습니다. 수분 흡습 또는 열열화 가능성이 있습니다."
+        st.markdown(f"- **복합 당원 품질 변동 분석**: {eval_msg}")
+
+    st.markdown(
+        "- **배지 조제 권고사항**: 선택된 당원의 투입 비율과 HPLC 측정된 당 조성 결과를 반영하여 차기 배지 칭량 레시피를 보정하십시오."
     )
-
-    st.markdown(f"**1. 스펙 대비 역산 당농도 변동 분석**\n- {cause}")
-    st.markdown(f"**2. Sucrose 가수분해 평가**\n- {hydro}")
-    st.markdown(f"**3. {raw_material_type} 품질 및 공정 특성**\n{mol_info}")
-    st.markdown(f"**4. 배지 조제 및 품질 관리 권고사항**\n- {reco}")
