@@ -1,10 +1,9 @@
 import pandas as pd
-import numpy as np
 import streamlit as st
 
 # --- PAGE CONFIG ---
 st.set_page_config(
-    page_title="다중 Jar 배지 당농도 역산 & 통합 분석 시스템",
+    page_title="다중 당원 배지 당농도 역산 & 분석 시스템",
     page_icon="🧪",
     layout="wide",
 )
@@ -18,18 +17,20 @@ MW_SUC = 342.30
 DEFAULT_REF_SUC, DEFAULT_REF_GLU, DEFAULT_REF_FRU = 6.12, 6.04, 6.36
 DEFAULT_MOL_SUC, DEFAULT_MOL_GLU, DEFAULT_MOL_FRU = 24.80, 7.00, 8.20
 
-# --- CALLBACK FUNCTIONS ---
+# --- CALLBACK FUNCTIONS (체크박스 변경 시 강제 값 갱신) ---
 def update_ref_spec():
     if st.session_state.get("check_auto_ref", False):
         st.session_state["ref_suc"] = DEFAULT_REF_SUC
         st.session_state["ref_glu"] = DEFAULT_REF_GLU
         st.session_state["ref_fru"] = DEFAULT_REF_FRU
 
+
 def update_mol_spec():
     if st.session_state.get("check_auto_mol", False):
         st.session_state["mol_suc"] = DEFAULT_MOL_SUC
         st.session_state["mol_glu"] = DEFAULT_MOL_GLU
         st.session_state["mol_fru"] = DEFAULT_MOL_FRU
+
 
 # Custom CSS
 st.markdown(
@@ -45,253 +46,705 @@ st.markdown(
         margin-top: 20px;
         margin-bottom: 15px;
     }
+    .step-card {
+        background-color: #f8f9fa;
+        border-left: 5px solid #4B7BEC;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 15px;
+    }
+    .step-title {
+        color: #2D98DA;
+        font-weight: bold;
+        font-size: 1.1rem;
+        margin-bottom: 8px;
+    }
     .highlight-card {
         background-color: #eef5ff;
         border: 2px solid #3867d6;
         border-radius: 12px;
-        padding: 15px;
+        padding: 20px;
         text-align: center;
+        box-shadow: 0 4px 10px rgba(56, 103, 214, 0.15);
+    }
+    .highlight-title {
+        color: #264653;
+        font-size: 1.1rem;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    .highlight-value {
+        color: #3867d6;
+        font-size: 2.5rem;
+        font-weight: 800;
+        margin: 5px 0;
+    }
+    .highlight-delta {
+        font-size: 1.0rem;
+        font-weight: bold;
+        color: #20bf6b;
     }
     </style>
 """,
     unsafe_allow_html=True,
 )
 
-st.title("🧪 Multi-Jar 배지 당농도 일괄 역산 & 통합 분석 시스템")
-st.markdown("여러 대의 배양기(Jar) 조건을 한 번에 입력하고 일괄 분석 결과를 비교하세요.")
+st.title("🧪 다중 당원 배지 당농도 역산 & 자동 분석 시스템")
+st.markdown(
+    "설정된 입력 순서에 따라 조건 및 HPLC 측정 데이터를 입력하고 역산 결과를 확인하세요."
+)
 
-# ---------------------------------------------------------
-# Section 1. 기본 설정을 위한 공통 조건
-# ---------------------------------------------------------
-st.markdown('<div class="section-header">1. 기본 공정 및 당원 선택</div>', unsafe_allow_html=True)
+col_input, col_report = st.columns([1.1, 0.9])
 
-c1, c2 = st.columns([2, 1])
-with c1:
+with col_input:
+    # ---------------------------------------------------------
+    # Section 1. 당원 종류 선택
+    # ---------------------------------------------------------
+    st.markdown(
+        '<div class="section-header">1. 당원 종류 선택</div>',
+        unsafe_allow_html=True,
+    )
     selected_sources = st.multiselect(
         "사용할 당원 선택 (중복 선택 가능)",
         ["포도당", "액당", "정제당", "당밀"],
         default=["포도당", "정제당"],
     )
-with c2:
-    num_jars = st.number_input("분석할 Jar(배양기) 개수", min_value=1, max_value=12, value=4, step=1)
 
-# ---------------------------------------------------------
-# Section 2. 당원 공통 스펙 입력
-# ---------------------------------------------------------
-st.markdown('<div class="section-header">2. 당원 스펙 설정</div>', unsafe_allow_html=True)
-
-p_glu, p_liq = 91.0, 75.0
-c_ref_suc, c_ref_glu, c_ref_fru = 0.0, 0.0, 0.0
-c_mol_suc, c_mol_glu, c_mol_fru = 0.0, 0.0, 0.0
-correction_factor = 1.0
-
-spec_cols = st.columns(len(selected_sources) if selected_sources else 1)
-
-for idx, src in enumerate(selected_sources):
-    with spec_cols[idx]:
-        if src == "포도당":
-            st.subheader("📌 포도당 스펙")
-            p_glu = st.number_input("순도 (%)", value=91.0, step=0.1, key="p_glu")
-        elif src == "액당":
-            st.subheader("📌 액당 스펙")
-            p_liq = st.number_input("순도/고형분 (%)", value=75.0, step=0.1, key="p_liq")
-        elif src == "정제당":
-            st.subheader("📌 정제당 스펙")
-            use_auto_ref_spec = st.checkbox(
-                "대표 평균 스펙 사용",
-                value=False,
-                key="check_auto_ref",
-                on_change=update_ref_spec,
-            )
-            c_ref_suc = st.number_input("Sucrose (%)", value=DEFAULT_REF_SUC, step=0.01, key="ref_suc", disabled=use_auto_ref_spec)
-            c_ref_glu = st.number_input("Glucose (%)", value=DEFAULT_REF_GLU, step=0.01, key="ref_glu", disabled=use_auto_ref_spec)
-            c_ref_fru = st.number_input("Fructose (%)", value=DEFAULT_REF_FRU, step=0.01, key="ref_fru", disabled=use_auto_ref_spec)
-            if use_auto_ref_spec:
-                correction_factor = 1.030
-        elif src == "당밀":
-            st.subheader("📌 당밀 스펙")
-            use_auto_mol_spec = st.checkbox(
-                "대표 평균 스펙 사용",
-                value=False,
-                key="check_auto_mol",
-                on_change=update_mol_spec,
-            )
-            c_mol_suc = st.number_input("Sucrose (%)", value=DEFAULT_MOL_SUC, step=0.01, key="mol_suc", disabled=use_auto_mol_spec)
-            c_mol_glu = st.number_input("Glucose (%)", value=DEFAULT_MOL_GLU, step=0.01, key="mol_glu", disabled=use_auto_mol_spec)
-            c_mol_fru = st.number_input("Fructose (%)", value=DEFAULT_MOL_FRU, step=0.01, key="mol_fru", disabled=use_auto_mol_spec)
-            if use_auto_mol_spec:
-                correction_factor = 1.031
-
-# ---------------------------------------------------------
-# Section 3. Jar별 조건 및 HPLC 데이터 입력 (표 데이터 에디터)
-# ---------------------------------------------------------
-st.markdown('<div class="section-header">3. Jar별 당원 농도 및 0h HPLC 데이터 일괄 입력</div>', unsafe_allow_html=True)
-st.caption("💡 엑셀처럼 각 Jar의 목표 투입 농도(%)와 HPLC 분석 결과(w/v%)를 수정 및 입력하세요.")
-
-jar_names = [f"Jar #{i+1}" for i in range(num_jars)]
-
-# 1) Jar별 목표 농도 데이터프레임 초기화
-default_input_data = {"Jar": jar_names}
-for src in selected_sources:
-    default_input_data[f"{src}_농도(%)"] = [3.5] * num_jars
-
-df_target_input = pd.DataFrame(default_input_data)
-
-# 2) Jar별 HPLC 데이터프레임 초기화
-df_hplc_input = pd.DataFrame({
-    "Jar": jar_names,
-    "Sucrose(w/v%)": [1.00] * num_jars,
-    "Glucose(w/v%)": [4.76] * num_jars,
-    "Fructose(w/v%)": [1.76] * num_jars,
-})
-
-col_ed1, col_ed2 = st.columns(2)
-
-with col_ed1:
-    st.subheader("📋 [입력] Jar별 당원 설정 농도")
-    edited_target_df = st.data_editor(
-        df_target_input,
-        hide_index=True,
-        use_container_width=True,
-        key="target_editor"
+    # ---------------------------------------------------------
+    # Section 2. 당원별 당농도 입력 및 합산 총당/비율 자동 계산
+    # ---------------------------------------------------------
+    st.markdown(
+        '<div class="section-header">2. 당원별 당농도 입력</div>',
+        unsafe_allow_html=True,
     )
 
-with col_ed2:
-    st.subheader("🧪 [입력] 배양액 0h HPLC 실측 결과")
-    edited_hplc_df = st.data_editor(
-        df_hplc_input,
-        hide_index=True,
-        use_container_width=True,
-        key="hplc_editor"
+    target_sugar_dict = {}
+    sum_target_sugar = 0.0
+
+    if selected_sources:
+        st.caption("각 당원의 농도를 입력해주세요.")
+        ratio_cols = st.columns(len(selected_sources))
+
+        for idx, src in enumerate(selected_sources):
+            with ratio_cols[idx]:
+                target_sugar_dict[src] = st.number_input(
+                    f"{src} 농도 (%)",
+                    value=3.5 if idx == 0 else 3.5,
+                    step=0.1,
+                    min_value=0.0,
+                    key=f"target_sugar_{src}",
+                )
+
+        sum_target_sugar = sum(target_sugar_dict.values())
+
+        if sum_target_sugar > 0:
+            ratio_parts = []
+            for src, val in target_sugar_dict.items():
+                pct = (val / sum_target_sugar) * 100
+                ratio_parts.append(f"**{src}**: {pct:.1f}% ({val:.2f}%)")
+
+            st.success(
+                f"🎯 **합산 총당 농도**: **{sum_target_sugar:.2f} w/v%**"
+            )
+            st.info(f"💡 **당원별 구성 비율**: {' | '.join(ratio_parts)}")
+        else:
+            st.warning("⚠️ 1개 이상의 당원 농도를 0% 초과로 입력해 주세요.")
+    else:
+        st.warning("⚠️ 당원 종류를 1개 이상 선택해 주세요.")
+
+    # ---------------------------------------------------------
+    # Section 3. 당원 스펙 입력
+    # ---------------------------------------------------------
+    st.markdown(
+        '<div class="section-header">3. 당원 스펙 입력</div>',
+        unsafe_allow_html=True,
     )
 
-calc_btn = st.button("🚀 전체 Jar 일괄 역산 및 비교 리포트 생성", use_container_width=True, type="primary")
+    p_glu = 91.0
+    p_liq = 75.0
+    correction_factor = 1.0
 
-# ---------------------------------------------------------
-# Section 4. 일괄 역산 계산 Engine 및 결과
-# ---------------------------------------------------------
-if calc_btn or "multi_res" in st.session_state:
-    results_list = []
+    if "포도당" in selected_sources:
+        st.subheader("📌 포도당 스펙")
+        p_glu = st.number_input(
+            "포도당 순도 (%)", value=91.0, step=0.1, key="p_glu"
+        )
+
+    if "액당" in selected_sources:
+        st.subheader("📌 액당 스펙")
+        p_liq = st.number_input(
+            "액당 순도/고형분 (%)", value=75.0, step=0.1, key="p_liq"
+        )
+
+    if "정제당" in selected_sources:
+        st.subheader("📌 정제당 스펙")
+        use_auto_ref_spec = st.checkbox(
+            "정제당 세부 스펙을 모름",
+            value=False,
+            key="check_auto_ref",
+            on_change=update_ref_spec,  # 체크 여부 변경 시 콜백 실행
+            help="체크 시 정제당의 대표 평균 스펙 농도가 자동 작성되고 수정이 제한됩니다.",
+        )
+
+        col_ref1, col_ref2, col_ref3 = st.columns(3)
+        with col_ref1:
+            c_ref_suc = st.number_input(
+                "Sucrose (%)",
+                value=DEFAULT_REF_SUC,
+                step=0.01,
+                key="ref_suc",
+                disabled=use_auto_ref_spec,
+            )
+        with col_ref2:
+            c_ref_glu = st.number_input(
+                "Glucose (%)",
+                value=DEFAULT_REF_GLU,
+                step=0.01,
+                key="ref_glu",
+                disabled=use_auto_ref_spec,
+            )
+        with col_ref3:
+            c_ref_fru = st.number_input(
+                "Fructose (%)",
+                value=DEFAULT_REF_FRU,
+                step=0.01,
+                key="ref_fru",
+                disabled=use_auto_ref_spec,
+            )
+
+        if use_auto_ref_spec:
+            correction_factor = 1.030
+            st.warning(
+                "⚠️ 세부 스펙 미입력 시 분석 데이터 특성에 따라 오차가 발생하여 결과가 부정확할 수 있습니다."
+            )
+
+        ref_spec_sum = c_ref_suc + c_ref_glu + c_ref_fru
+        st.success(f"🏷️ **정제당 총 스펙 순도**: **{ref_spec_sum:.2f} %**")
+    else:
+        c_ref_suc, c_ref_glu, c_ref_fru = 0.0, 0.0, 0.0
+
+    if "당밀" in selected_sources:
+        st.subheader("📌 당밀 스펙")
+        use_auto_mol_spec = st.checkbox(
+            "당밀 세부 스펙을 모름",
+            value=False,
+            key="check_auto_mol",
+            on_change=update_mol_spec,  # 체크 여부 변경 시 콜백 실행
+            help="체크 시 당밀의 대표 평균 스펙 농도가 자동 작성되고 수정이 제한됩니다.",
+        )
+
+        col_mol1, col_mol2, col_mol3 = st.columns(3)
+        with col_mol1:
+            c_mol_suc = st.number_input(
+                "Sucrose (%)",
+                value=DEFAULT_MOL_SUC,
+                step=0.01,
+                key="mol_suc",
+                disabled=use_auto_mol_spec,
+            )
+        with col_mol2:
+            c_mol_glu = st.number_input(
+                "Glucose (%)",
+                value=DEFAULT_MOL_GLU,
+                step=0.01,
+                key="mol_glu",
+                disabled=use_auto_mol_spec,
+            )
+        with col_mol3:
+            c_mol_fru = st.number_input(
+                "Fructose (%)",
+                value=DEFAULT_MOL_FRU,
+                step=0.01,
+                key="mol_fru",
+                disabled=use_auto_mol_spec,
+            )
+
+        if use_auto_mol_spec:
+            correction_factor = 1.031
+            st.warning(
+                "⚠️ 세부 스펙 미입력 시 분석 데이터 특성에 따라 오차가 발생하여 결과가 부정확할 수 있습니다."
+            )
+
+        mol_spec_sum = c_mol_suc + c_mol_glu + c_mol_fru
+        st.success(f"🏷️ **당밀 총 스펙 순도**: **{mol_spec_sum:.2f} %**")
+    else:
+        c_mol_suc, c_mol_glu, c_mol_fru = 0.0, 0.0, 0.0
+
+    # ---------------------------------------------------------
+    # Section 4. 배양액 0h 샘플 HPLC 측정 결과 입력
+    # ---------------------------------------------------------
+    st.markdown(
+        '<div class="section-header">4. 배양액 0h 샘플 HPLC 측정 결과 입력</div>',
+        unsafe_allow_html=True,
+    )
+    col_h1, col_h2, col_h3 = st.columns(3)
+    with col_h1:
+        hplc_suc = st.number_input(
+            "Sucrose (w/v%)", value=1.00, step=0.1, key="hplc_suc"
+        )
+    with col_h2:
+        hplc_glu = st.number_input(
+            "Glucose (w/v%)", value=4.76, step=0.1, key="hplc_glu"
+        )
+    with col_h3:
+        hplc_fru = st.number_input(
+            "Fructose (w/v%)", value=1.76, step=0.1, key="hplc_fru"
+        )
+
+    calc_button = st.button("🚀 당농도 역산 및 리포트 생성", use_container_width=True)
+
+
+# --- 계산 및 리포트 생성 ---
+if calc_button or "res" in st.session_state:
+    target_glu = target_sugar_dict.get("포도당", 0.0)
+    target_liq = target_sugar_dict.get("액당", 0.0)
+    target_ref = target_sugar_dict.get("정제당", 0.0)
+    target_mol = target_sugar_dict.get("당밀", 0.0)
+
+    # 1. 실제 투입량 환산 (w/v% -> g/L)
+    actual_glu_pct = target_glu * (100.0 / p_glu) if p_glu > 0 else 0
+    actual_liq_pct = target_liq * (100.0 / p_liq) if p_liq > 0 else 0
 
     ref_nominal_total = c_ref_suc + c_ref_glu + c_ref_fru
-    mol_nominal_total = c_mol_suc + c_mol_glu + c_mol_fru
+    actual_ref_pct = (
+        target_ref * (100.0 / ref_nominal_total)
+        if ref_nominal_total > 0
+        else 0
+    )
 
+    mol_nominal_total = c_mol_suc + c_mol_glu + c_mol_fru
+    actual_mol_pct = (
+        target_mol * (100.0 / mol_nominal_total)
+        if mol_nominal_total > 0
+        else 0
+    )
+
+    g_l_glu = actual_glu_pct * 10
+    g_l_liq = actual_liq_pct * 10
+    g_l_ref = actual_ref_pct * 10
+    g_l_mol = actual_mol_pct * 10
+
+    # 2. HPLC 실측 몰농도 계산
+    m_suc_meas = (hplc_suc * 10) / MW_SUC
+    m_glu_meas = (hplc_glu * 10) / MW_GLU
+    m_fru_meas = (hplc_fru * 10) / MW_FRU
+
+    m_total_meas = (m_suc_meas * 2) + m_glu_meas + m_fru_meas
+
+    # 단일 당원 차감
+    m_glu_powder = (
+        (g_l_glu * (p_glu / 100.0)) / MW_GLU if "포도당" in selected_sources else 0
+    )
+    m_liq_contrib = (
+        (g_l_liq * (p_liq / 100.0)) / MW_GLU if "액당" in selected_sources else 0
+    )
+
+    m_remaining = max(0.0, m_total_meas - m_glu_powder - m_liq_contrib)
+
+    # 복합 당원 명칭 및 역산
     complex_source_name = "복합당원"
-    nominal_purity = 0.0
+    nominal_complex_purity = 0.0
+    raw_actual_purity = 0.0
+    actual_complex_purity = 0.0
+    g_l_complex = 0.0
+
     if "정제당" in selected_sources and "당밀" not in selected_sources:
         complex_source_name = "정제당"
-        nominal_purity = ref_nominal_total
+        nominal_complex_purity = ref_nominal_total
+        g_l_complex = g_l_ref
+        c_ref_actual_mass = m_remaining * MW_GLU
+        raw_actual_purity = (
+            (c_ref_actual_mass / g_l_ref) * 100.0 if g_l_ref > 0 else 0.0
+        )
+        actual_complex_purity = raw_actual_purity * correction_factor
     elif "당밀" in selected_sources and "정제당" not in selected_sources:
         complex_source_name = "당밀"
-        nominal_purity = mol_nominal_total
+        nominal_complex_purity = mol_nominal_total
+        g_l_complex = g_l_mol
+        c_mol_actual_mass = m_remaining * MW_GLU
+        raw_actual_purity = (
+            (c_mol_actual_mass / g_l_mol) * 100.0 if g_l_mol > 0 else 0.0
+        )
+        actual_complex_purity = raw_actual_purity * correction_factor
 
-    for idx in range(num_jars):
-        jar_name = jar_names[idx]
-        
-        # Jar별 Target 농도
-        target_glu = edited_target_df.loc[idx, "포도당_농도(%)"] if "포도당" in selected_sources else 0.0
-        target_liq = edited_target_df.loc[idx, "액당_농도(%)"] if "액당" in selected_sources else 0.0
-        target_ref = edited_target_df.loc[idx, "정제당_농도(%)"] if "정제당" in selected_sources else 0.0
-        target_mol = edited_target_df.loc[idx, "당밀_농도(%)"] if "당밀" in selected_sources else 0.0
+    abs_diff = actual_complex_purity - nominal_complex_purity
 
-        # Jar별 HPLC
-        h_suc = edited_hplc_df.loc[idx, "Sucrose(w/v%)"]
-        h_glu = edited_hplc_df.loc[idx, "Glucose(w/v%)"]
-        h_fru = edited_hplc_df.loc[idx, "Fructose(w/v%)"]
-        total_hplc = h_suc + h_glu + h_fru
+    # 실제 역산 기반 기여농도 및 비중 계산
+    real_sugar_contributions = {}
+    total_measured_sugar = hplc_suc + hplc_glu + hplc_fru
 
-        # g/L 환산
-        act_glu_pct = target_glu * (100.0 / p_glu) if p_glu > 0 else 0
-        act_liq_pct = target_liq * (100.0 / p_liq) if p_liq > 0 else 0
-        act_ref_pct = target_ref * (100.0 / ref_nominal_total) if ref_nominal_total > 0 else 0
-        act_mol_pct = target_mol * (100.0 / mol_nominal_total) if mol_nominal_total > 0 else 0
+    if "포도당" in selected_sources:
+        real_sugar_contributions["포도당"] = actual_glu_pct * (p_glu / 100.0)
+    if "액당" in selected_sources:
+        real_sugar_contributions["액당"] = actual_liq_pct * (p_liq / 100.0)
+    if "정제당" in selected_sources:
+        real_sugar_contributions["정제당"] = actual_ref_pct * (
+            actual_complex_purity / 100.0
+            if complex_source_name == "정제당"
+            else ref_nominal_total / 100.0
+        )
+    if "당밀" in selected_sources:
+        real_sugar_contributions["당밀"] = actual_mol_pct * (
+            actual_complex_purity / 100.0
+            if complex_source_name == "당밀"
+            else mol_nominal_total / 100.0
+        )
 
-        g_l_glu = act_glu_pct * 10
-        g_l_liq = act_liq_pct * 10
-        g_l_ref = act_ref_pct * 10
-        g_l_mol = act_mol_pct * 10
+    calc_total_real_sugar = sum(real_sugar_contributions.values())
+    real_sugar_shares = {}
+    if calc_total_real_sugar > 0:
+        for src, val in real_sugar_contributions.items():
+            real_sugar_shares[src] = (val / calc_total_real_sugar) * 100
 
-        # HPLC 몰농도
-        m_suc_meas = (h_suc * 10) / MW_SUC
-        m_glu_meas = (h_glu * 10) / MW_GLU
-        m_fru_meas = (h_fru * 10) / MW_FRU
-        m_total_meas = (m_suc_meas * 2) + m_glu_meas + m_fru_meas
+    res = {
+        "selected_sources": selected_sources,
+        "measured_total_sugar_percent": total_measured_sugar,
+        "complex_source_name": complex_source_name,
+        "nominal_complex_purity": nominal_complex_purity,
+        "raw_actual_purity": raw_actual_purity,
+        "actual_complex_purity": actual_complex_purity,
+        "abs_diff": abs_diff,
+        "m_suc_meas": m_suc_meas,
+        "m_glu_meas": m_glu_meas,
+        "m_fru_meas": m_fru_meas,
+        "m_total_meas": m_total_meas,
+        "m_glu_powder": m_glu_powder,
+        "m_liq_contrib": m_liq_contrib,
+        "m_remaining": m_remaining,
+        "actual_glu_pct": actual_glu_pct,
+        "actual_liq_pct": actual_liq_pct,
+        "actual_ref_pct": actual_ref_pct,
+        "actual_mol_pct": actual_mol_pct,
+        "g_l_glu": g_l_glu,
+        "g_l_liq": g_l_liq,
+        "g_l_ref": g_l_ref,
+        "g_l_mol": g_l_mol,
+        "g_l_complex": g_l_complex,
+        "real_sugar_contributions": real_sugar_contributions,
+        "real_sugar_shares": real_sugar_shares,
+    }
+    st.session_state["res"] = res
 
-        # 차감
-        m_glu_powder = (g_l_glu * (p_glu / 100.0)) / MW_GLU if "포도당" in selected_sources else 0
-        m_liq_contrib = (g_l_liq * (p_liq / 100.0)) / MW_GLU if "액당" in selected_sources else 0
-        m_rem = max(0.0, m_total_meas - m_glu_powder - m_liq_contrib)
+    # --- 우측 칼럼 결과 리포트 ---
+    with col_report:
+        st.subheader("📊 5. 역산 결과 리포트")
 
-        # 복합당원 역산 순도
-        act_complex_purity = 0.0
-        if complex_source_name == "정제당" and g_l_ref > 0:
-            c_mass = m_rem * MW_GLU
-            act_complex_purity = ((c_mass / g_l_ref) * 100.0) * correction_factor
-        elif complex_source_name == "당밀" and g_l_mol > 0:
-            c_mass = m_rem * MW_GLU
-            act_complex_purity = ((c_mass / g_l_mol) * 100.0) * correction_factor
+        if complex_source_name != "복합당원":
+            m1, m2 = st.columns([1, 1.3])
+            with m1:
+                st.metric(
+                    f"{complex_source_name} 스펙 순도",
+                    f"{nominal_complex_purity:.2f}%",
+                )
+            with m2:
+                st.markdown(
+                    f"""
+                    <div class="highlight-card">
+                        <div class="highlight-title">🎯 역산된 {complex_source_name} 실제 당농도</div>
+                        <div class="highlight-value">{actual_complex_purity:.2f}%</div>
+                        <div class="highlight-delta">스펙 대비 차이: {abs_diff:+.2f}%p</div>
+                    </div>
+                """,
+                    unsafe_allow_html=True,
+                )
+        else:
+            st.metric(
+                "HPLC 실측 총 당농도",
+                f"{res['measured_total_sugar_percent']:.2f}%",
+            )
 
-        diff_purity = act_complex_purity - nominal_purity
+        st.write("")
+        st.markdown("##### 📌 실제 역산 기반 당원별 기여 농도 및 비중")
 
-        # 기여 농도
-        c_glu_contrib = act_glu_pct * (p_glu / 100.0) if "포도당" in selected_sources else 0
-        c_liq_contrib = act_liq_pct * (p_liq / 100.0) if "액당" in selected_sources else 0
-        c_ref_contrib = act_ref_pct * (act_complex_purity / 100.0 if complex_source_name == "정제당" else ref_nominal_total / 100.0) if "정제당" in selected_sources else 0
-        c_mol_contrib = act_mol_pct * (act_complex_purity / 100.0 if complex_source_name == "당밀" else mol_nominal_total / 100.0) if "당밀" in selected_sources else 0
+        table_data = []
+        if "포도당" in selected_sources:
+            table_data.append(
+                [
+                    "포도당",
+                    f"{actual_glu_pct:.4f} %",
+                    f"{real_sugar_contributions.get('포도당', 0):.2f} %",
+                    f"{real_sugar_shares.get('포도당', 0):.1f} %",
+                ]
+            )
+        if "액당" in selected_sources:
+            table_data.append(
+                [
+                    "액당",
+                    f"{actual_liq_pct:.4f} %",
+                    f"{real_sugar_contributions.get('액당', 0):.2f} %",
+                    f"{real_sugar_shares.get('액당', 0):.1f} %",
+                ]
+            )
+        if "정제당" in selected_sources:
+            table_data.append(
+                [
+                    "정제당",
+                    f"{actual_ref_pct:.4f} %",
+                    f"{real_sugar_contributions.get('정제당', 0):.2f} %",
+                    f"{real_sugar_shares.get('정제당', 0):.1f} %",
+                ]
+            )
+        if "당밀" in selected_sources:
+            table_data.append(
+                [
+                    "당밀",
+                    f"{actual_mol_pct:.4f} %",
+                    f"{real_sugar_contributions.get('당밀', 0):.2f} %",
+                    f"{real_sugar_shares.get('당밀', 0):.1f} %",
+                ]
+            )
 
-        tot_contrib = c_glu_contrib + c_liq_contrib + c_ref_contrib + c_mol_contrib
+        df_res = pd.DataFrame(
+            table_data,
+            columns=[
+                "당원",
+                "칭량 투입량(w/v%)",
+                "실제 기여 당농도(w/v%)",
+                "실제 총당 내 비중(%)",
+            ],
+        )
+        st.dataframe(df_res, use_container_width=True, hide_index=True)
 
-        results_list.append({
-            "Jar": jar_name,
-            "HPLC 실측총당(%)": round(total_hplc, 2),
-            f"역산 {complex_source_name} 순도(%)": round(act_complex_purity, 2),
-            "스펙 대비 차이(%p)": round(diff_purity, 2),
-            "포도당 기여당(%)": round(c_glu_contrib, 2),
-            "정제당 기여당(%)": round(c_ref_contrib, 2),
-            "당밀 기여당(%)": round(c_mol_contrib, 2),
-            "실제 총 기여당(%)": round(tot_contrib, 2),
-        })
+        if real_sugar_shares:
+            share_summary = " : ".join(
+                [f"{src} {val:.1f}%" for src, val in real_sugar_shares.items()]
+            )
+            st.info(f"💡 **실제 역산 기반 당원 구성 비중**: {share_summary}")
 
-    df_results = pd.DataFrame(results_list)
-    st.session_state["multi_res"] = df_results
+        st.markdown("---")
+
+        # ---------------------------------------------------------
+        # 상세 공정 및 당원 특성 리포트
+        # ---------------------------------------------------------
+        st.subheader("📋 상세 공정 및 당원 특성 리포트")
+
+        # 1. Sucrose 가수분해율 계산
+        complex_suc_spec = (
+            c_ref_suc if complex_source_name == "정제당" else c_mol_suc
+        )
+        complex_pct = (
+            actual_ref_pct
+            if complex_source_name == "정제당"
+            else actual_mol_pct
+        )
+        expected_suc = complex_pct * (complex_suc_spec / 100.0)
+
+        if expected_suc > 0:
+            hydro_rate = max(
+                0.0, min(100.0, (1 - (hplc_suc / expected_suc)) * 100.0)
+            )
+        else:
+            hydro_rate = 100.0 if hplc_suc == 0 else 0.0
+
+        st.markdown("#### 1️⃣ Sucrose 열가수분해 및 열화 분석")
+        st.markdown(
+            f"- **추정 가수분해율**: **{hydro_rate:.1f}%** (이론 투입 추정치 {expected_suc:.2f}% 대비 실측 잔류량 {hplc_suc:.2f}%)"
+        )
+        if hydro_rate >= 95.0:
+            st.caption(
+                "🟢 **분석**: 멸균 공정 중 Sucrose가 대부분 Glucose와 Fructose로 완전히 전환되었습니다."
+            )
+        elif hydro_rate >= 50.0:
+            st.caption(
+                "🟡 **분석**: Sucrose 일부가 잔류된 부분 가수분해 상태입니다. 멸균 열이력(pH, 시간)을 확인하세요."
+            )
+        else:
+            st.caption(
+                "🔴 **분석**: 가수분해 진행률이 낮습니다. 멸균 조건 미달 또는 배지 pH 편차 가능성을 점검하세요."
+            )
+
+        st.markdown("#### 2️⃣ 당원 품질 및 순도 변동 평가")
+        if complex_source_name != "복합당원":
+            st.markdown(
+                f"- **스펙 순도**: `{nominal_complex_purity:.2f}%` ➡️ **실제 역산 순도**: `{actual_complex_purity:.2f}%` (`{abs_diff:+.2f}%p` 변동)"
+            )
+            if abs(abs_diff) <= 2.0:
+                st.caption(
+                    "🟢 **분석**: 원료 스펙 오차 범위(±2%p) 내로 품질이 매우 안정적입니다."
+                )
+            elif abs_diff > 2.0:
+                st.caption(
+                    f"🔴 **분석**: 스펙 대비 당 함량이 **{abs_diff:.2f}%p 높게 역산**되었습니다. 원료 저장 중 수분 증발(농축) 또는 제조사 품질 편차가 의심됩니다."
+                )
+            else:
+                st.caption(
+                    f"🔴 **분석**: 스펙 대비 당 함량이 **{abs(abs_diff):.2f}%p 낮게 역산**되었습니다. 원료 흡습, 보관 중 열화 또는 고형분 침전 현상을 확인하세요."
+                )
+
+        st.markdown("#### 3️⃣ 공정 및 칭량 오차 검증")
+        diff_total = total_measured_sugar - sum_target_sugar
+        st.markdown(
+            f"- **목표 설정 총당**: `{sum_target_sugar:.2f}%` ➡️ **HPLC 실측 총당**: `{total_measured_sugar:.2f}%` (`{diff_total:+.2f}%p` 차이)"
+        )
+        if abs(diff_total) > 0.5:
+            st.caption(
+                "⚠️ **주의**: 실측 총당과의 차이가 0.5%p 이상 발생했습니다. 칭량 과정에서의 스케일 오차, 용수 부피 오차, 또는 멸균 후 증발 농축 여부를 재검증하세요."
+            )
+
+    st.markdown("---")
 
     # ---------------------------------------------------------
-    # Section 5. 통합 비교 리포트 출력
+    # Section 6. Step별 상세 계산 과정 토글 영역
     # ---------------------------------------------------------
-    st.markdown('<div class="section-header">4. Multi-Jar 통합 분석 결과 비교</div>', unsafe_allow_html=True)
+    with st.expander(
+        "🔍 자세한 Step별 계산 과정 및 데이터 보기 (클릭 시 펼침)",
+        expanded=False,
+    ):
+        st.markdown("### 📐 단계별 상세 역산 가이드")
 
-    st.subheader(f"📊 Jar별 {complex_source_name} 역산 순도 및 기여 농도 요약")
-    st.dataframe(df_results, use_container_width=True, hide_index=True)
+        # Step 1
+        st.markdown(
+            """<div class="step-card">
+            <div class="step-title">[Step 1] 원료 투입량 및 멸균 후 총 당 몰수 산출</div>
+            선택된 원료의 순도를 감안한 실제 칭량 투입량(g/L)과 HPLC 측정값 기반의 몰농도를 산출합니다.
+        </div>""",
+            unsafe_allow_html=True,
+        )
 
-    # 차트 시각화
-    st.subheader("📈 Jar별 주요 결과 비교 시각화")
-    chart_col1, chart_col2 = st.columns(2)
-    
-    with chart_col1:
-        st.caption(f"📌 Jar별 {complex_source_name} 역산 실제 순도 (%)")
-        st.bar_chart(df_results.set_index("Jar")[f"역산 {complex_source_name} 순도(%)"])
+        s1_col1, s1_col2 = st.columns(2)
+        with s1_col1:
+            st.caption("📌 **원료별 실제 칭량 투입량 (g/L)**")
+            input_list = []
+            if "포도당" in selected_sources:
+                input_list.append(
+                    [
+                        "포도당",
+                        f"{res['actual_glu_pct']:.4f} %",
+                        f"{res['g_l_glu']:.2f} g/L",
+                    ]
+                )
+            if "액당" in selected_sources:
+                input_list.append(
+                    [
+                        "액당",
+                        f"{res['actual_liq_pct']:.4f} %",
+                        f"{res['g_l_liq']:.2f} g/L",
+                    ]
+                )
+            if "정제당" in selected_sources:
+                input_list.append(
+                    [
+                        "정제당",
+                        f"{res['actual_ref_pct']:.4f} %",
+                        f"{res['g_l_ref']:.2f} g/L",
+                    ]
+                )
+            if "당밀" in selected_sources:
+                input_list.append(
+                    [
+                        "당밀",
+                        f"{res['actual_mol_pct']:.4f} %",
+                        f"{res['g_l_mol']:.2f} g/L",
+                    ]
+                )
 
-    with chart_col2:
-        st.caption("📌 Jar별 HPLC 실측 총당 vs 계산된 실제 총 기여당 (%)")
-        st.line_chart(df_results.set_index("Jar")[["HPLC 실측총당(%)", "실제 총 기여당(%)"]])
+            df_step1_input = pd.DataFrame(
+                input_list, columns=["당원", "칭량 비율(w/v%)", "칭량 농도(g/L)"]
+            )
+            st.dataframe(
+                df_step1_input, use_container_width=True, hide_index=True
+            )
 
-    # 편차 및 균일성 종합 평가
-    st.subheader("📋 Jar 간 균일성 및 공정 통계 평가")
-    
-    purity_vals = df_results[f"역산 {complex_source_name} 순도(%)"]
-    mean_purity = np.mean(purity_vals)
-    std_purity = np.std(purity_vals)
+        with s1_col2:
+            st.caption("📌 **HPLC 실측 당의 C6 등가 몰농도 (mol/L)**")
+            df_step1_hplc = pd.DataFrame(
+                [
+                    ["Sucrose", f"{hplc_suc:.2f} %", f"{res['m_suc_meas']:.4f} mol/L"],
+                    ["Glucose", f"{hplc_glu:.2f} %", f"{res['m_glu_meas']:.4f} mol/L"],
+                    [
+                        "Fructose",
+                        f"{hplc_fru:.2f} %",
+                        f"{res['m_fru_meas']:.4f} mol/L",
+                    ],
+                    [
+                        "총 C6 등가 몰수합",
+                        "-",
+                        f"**{res['m_total_meas']:.4f} mol/L**",
+                    ],
+                ],
+                columns=["성분", "HPLC 측정값", "몰농도 (mol/L)"],
+            )
+            st.dataframe(
+                df_step1_hplc, use_container_width=True, hide_index=True
+            )
 
-    m1, m2, m3 = st.columns(3)
-    with m1:
-        st.metric("평균 역산 순도", f"{mean_purity:.2f}%")
-    with m2:
-        st.metric("Jar 간 표준 편차", f"±{std_purity:.2f}%p")
-    with m3:
-        cv = (std_purity / mean_purity) * 100 if mean_purity > 0 else 0
-        st.metric("변동 계수 (CV)", f"{cv:.1f}%")
+        st.markdown("---")
 
-    if cv <= 3.0:
-        st.success("🟢 **공정 평가**: Jar 간 당농도 편차가 3% 이내로 배지 조제 및 멸균 재현성이 매우 우수합니다.")
-    else:
-        st.warning("⚠️ **공정 평가**: Jar 간 편차가 존재합니다. 배지 칭량 오차, 용수 충진량 차이 또는 Jar별 멸균 열이력 균일성을 점검하세요.")
+        # Step 2
+        st.markdown(
+            f"""<div class="step-card">
+            <div class="step-title">[Step 2] 단일 당원 유래 몰농도 분리 & 차감</div>
+            HPLC 총 몰수에서 단일 당원(포도당/액당) 투입분을 차감하여 {complex_source_name} 유래 몰수만 추출합니다.
+        </div>""",
+            unsafe_allow_html=True,
+        )
+
+        s2_col1, s2_col2 = st.columns([2, 1])
+        with s2_col1:
+            st.latex(
+                r"M_{\text{"
+                + complex_source_name
+                + r" 유래}} = M_{\text{HPLC 총몰수}} - M_{\text{포도당}} - M_{\text{액당}}"
+            )
+            step2_list = [
+                ["HPLC 총 C6 등가 몰수", f"{res['m_total_meas']:.4f} mol/L"]
+            ]
+            if "포도당" in selected_sources:
+                step2_list.append(
+                    ["포도당 유래 몰수 차감액", f"- {res['m_glu_powder']:.4f} mol/L"]
+                )
+            if "액당" in selected_sources:
+                step2_list.append(
+                    ["액당 유래 몰수 차감액", f"- {res['m_liq_contrib']:.4f} mol/L"]
+                )
+
+            step2_list.append(
+                [
+                    f"{complex_source_name} 유래 순수 몰수",
+                    f"**{res['m_remaining']:.4f} mol/L**",
+                ]
+            )
+
+            df_step2 = pd.DataFrame(step2_list, columns=["구분", "몰농도 (mol/L)"])
+            st.dataframe(df_step2, use_container_width=True, hide_index=True)
+
+        st.markdown("---")
+
+        # Step 3
+        st.markdown(
+            f"""<div class="step-card">
+            <div class="step-title">[Step 3] {complex_source_name} 유래 당 농도 역산 (g/L)</div>
+            차감 후 잔여 몰농도를 질량 농도(g/L)로 환산합니다.
+        </div>""",
+            unsafe_allow_html=True,
+        )
+        st.latex(
+            r"\text{"
+            + complex_source_name
+            + r" 유래 당 농도 (g/L)} = M_{\text{"
+            + complex_source_name
+            + r" 유래 (mol/L)}} \times 180.16"
+        )
+        complex_g_l = res["m_remaining"] * MW_GLU
+        st.info(
+            f"💡 **역산된 {complex_source_name} 유래 당 농도**: `{complex_g_l:.2f} g/L`"
+        )
+
+        st.markdown("---")
+
+        # Step 4
+        st.markdown(
+            f"""<div class="step-card">
+            <div class="step-title">[Step 4] 최종 {complex_source_name} 당농도 순도 및 차이 산출 (%)</div>
+            {complex_source_name} 투입량 대비 역산된 당 질량을 통해 실제 농도(순도) 및 스펙 대비 차이(%p)를 최종 계산합니다.
+        </div>""",
+            unsafe_allow_html=True,
+        )
+        s4_col1, s4_col2 = st.columns(2)
+        with s4_col1:
+            st.metric(
+                f"역산된 {complex_source_name} 당농도(순도)",
+                f"{res['actual_complex_purity']:.2f}%",
+            )
+        with s4_col2:
+            st.metric("스펙 대비 차이", f"{abs_diff:+.2f}%p")
