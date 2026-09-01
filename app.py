@@ -106,47 +106,48 @@ with col_input:
     )
 
     # ---------------------------------------------------------
-    # Section 3. 당원 사용 비율 선택
+    # Section 3. 당원별 목표 당농도 입력 및 구성 비율 산출
     # ---------------------------------------------------------
     st.markdown(
-        '<div class="section-header">3. 당원 사용 비율 선택</div>',
+        '<div class="section-header">3. 당원별 목표 당농도 입력</div>',
         unsafe_allow_html=True,
     )
 
-    source_ratios = {}
+    target_sugar_dict = {}
     if selected_sources:
-        st.caption(
-            "선택한 당원들의 비율을 입력하면 백분율환산 및 목표 총당 대비 당농도가 표시됩니다."
-        )
+        st.caption("각 당원이 담당할 목표 당농도(w/v%)를 입력하세요.")
         ratio_cols = st.columns(len(selected_sources))
-        default_ratio = round(100.0 / len(selected_sources), 1)
+        default_val = round(target_total_sugar / len(selected_sources), 2)
 
         for idx, src in enumerate(selected_sources):
             with ratio_cols[idx]:
-                source_ratios[src] = st.number_input(
-                    f"{src} 비율",
-                    value=default_ratio,
-                    step=1.0,
+                target_sugar_dict[src] = st.number_input(
+                    f"{src} 목표 농도 (%)",
+                    value=default_val,
+                    step=0.1,
                     min_value=0.0,
                 )
 
-        total_ratio_sum = sum(source_ratios.values())
-        if total_ratio_sum > 0:
-            ratio_details = []
-            sugar_breakdown = []
-            for src, val in source_ratios.items():
-                pct = (val / total_ratio_sum) * 100
-                calc_sugar = target_total_sugar * (pct / 100)
-                ratio_details.append(f"**{src}**: {pct:.1f}%")
-                sugar_breakdown.append(f"{src} {calc_sugar:.2f}%")
+        sum_target_sugar = sum(target_sugar_dict.values())
 
-            st.info(f"💡 **당원 간 구성 비율**: {' | '.join(ratio_details)}")
-            st.success(
-                f"🎯 **목표 총당({target_total_sugar:.1f}%) 내 당원별 담당 농도**: "
-                + " + ".join(sugar_breakdown)
-            )
+        if sum_target_sugar > 0:
+            ratio_parts = []
+            for src, val in target_sugar_dict.items():
+                pct = (val / sum_target_sugar) * 100
+                ratio_parts.append(f"**{src}**: {pct:.1f}% ({val:.2f}%)")
+
+            st.info(f"💡 **당원 구성 비율**: {' | '.join(ratio_parts)}")
+
+            if abs(sum_target_sugar - target_total_sugar) > 0.01:
+                st.warning(
+                    f"⚠️ 입력된 당원 농도 합계({sum_target_sugar:.2f}%)가 Section 1의 목표 총당({target_total_sugar:.2f}%)과 다릅니다."
+                )
+            else:
+                st.success(
+                    f"✅ 당원 농도 합계가 목표 총당({target_total_sugar:.2f}%)과 일치합니다."
+                )
         else:
-            st.warning("⚠️ 비율의 합이 0보다 커야 합니다.")
+            st.warning("⚠️ 1개 이상의 당원 농도를 0% 초과로 입력해 주세요.")
     else:
         st.warning("⚠️ 당원 종류를 1개 이상 선택해 주세요.")
 
@@ -237,15 +238,6 @@ with col_input:
 
 # --- 계산 및 리포트 생성 ---
 if calc_button or "res" in st.session_state:
-    total_ratio_sum = sum(source_ratios.values())
-    target_sugar_dict = {}
-
-    if total_ratio_sum > 0:
-        for src in selected_sources:
-            target_sugar_dict[src] = target_total_sugar * (
-                source_ratios[src] / total_ratio_sum
-            )
-
     target_glu = target_sugar_dict.get("포도당", 0.0)
     target_liq = target_sugar_dict.get("액당", 0.0)
     target_ref = target_sugar_dict.get("정제당", 0.0)
@@ -316,7 +308,7 @@ if calc_button or "res" in st.session_state:
 
     abs_diff = actual_complex_purity - nominal_complex_purity
 
-    # 역산된 당농도 기반의 실제 각 당원별 기여농도(w/v%) 및 비중(%) 계산
+    # 실제 역산 기반 기여농도 및 비중 계산
     real_sugar_contributions = {}
     total_measured_sugar = hplc_suc + hplc_glu + hplc_fru
 
@@ -455,31 +447,77 @@ if calc_button or "res" in st.session_state:
             share_summary = " : ".join(
                 [f"{src} {val:.1f}%" for src, val in real_sugar_shares.items()]
             )
-            st.info(f"💡 **실제 역산 기반 당원별 구성 비중**: {share_summary}")
+            st.info(f"💡 **실제 역산 기반 당원 구성 비중**: {share_summary}")
 
         st.markdown("---")
-        st.subheader("📋 공정 및 당원 특성 리포트")
 
-        if hplc_suc == 0:
-            hydro_text = "Sucrose가 전혀 검출되지 않아 **100% 완전 가수분해**되었습니다."
+        # ---------------------------------------------------------
+        # 상세 공정 및 당원 특성 리포트
+        # ---------------------------------------------------------
+        st.subheader("📋 상세 공정 및 당원 특성 리포트")
+
+        # 1. Sucrose 가수분해율 계산
+        complex_suc_spec = (
+            c_ref_suc if complex_source_name == "정제당" else c_mol_suc
+        )
+        complex_pct = (
+            actual_ref_pct
+            if complex_source_name == "정제당"
+            else actual_mol_pct
+        )
+        expected_suc = complex_pct * (complex_suc_spec / 100.0)
+
+        if expected_suc > 0:
+            hydro_rate = max(
+                0.0, min(100.0, (1 - (hplc_suc / expected_suc)) * 100.0)
+            )
         else:
-            hydro_text = (
-                f"Sucrose가 {hplc_suc:.2f}% 잔류하여 부분 가수분해되었습니다."
+            hydro_rate = 100.0 if hplc_suc == 0 else 0.0
+
+        st.markdown("#### 1️⃣ Sucrose 열가수분해 및 열화 분석")
+        st.markdown(
+            f"- **추정 가수분해율**: **{hydro_rate:.1f}%** (이론 투입 추정치 {expected_suc:.2f}% 대비 실측 잔류량 {hplc_suc:.2f}%)"
+        )
+        if hydro_rate >= 95.0:
+            st.caption(
+                "🟢 **분석**: 멸균 공정 중 Sucrose가 대부분 Glucose와 Fructose로 완전히 전환되었습니다."
+            )
+        elif hydro_rate >= 50.0:
+            st.caption(
+                "🟡 **분석**: Sucrose 일부가 잔류된 부분 가수분해 상태입니다. 멸균 열이력(pH, 시간)을 확인하세요."
+            )
+        else:
+            st.caption(
+                "🔴 **분석**: 가수분해 진행률이 낮습니다. 멸균 조건 미달 또는 배지 pH 편차 가능성을 점검하세요."
             )
 
-        st.markdown(f"- **Sucrose 가수분해**: {hydro_text}")
-
+        st.markdown("#### 2️⃣ 당원 품질 및 순도 변동 평가")
         if complex_source_name != "복합당원":
+            st.markdown(
+                f"- **스펙 순도**: `{nominal_complex_purity:.2f}%` ➡️ **실제 역산 순도**: `{actual_complex_purity:.2f}%` (`{abs_diff:+.2f}%p` 변동)"
+            )
             if abs(abs_diff) <= 2.0:
-                eval_msg = (
-                    f"스펙 범위 내에서 안정적입니다 (차이: {abs_diff:+.2f}%p)."
+                st.caption(
+                    "🟢 **분석**: 원료 스펙 오차 범위(±2%p) 내로 품질이 매우 안정적입니다."
                 )
             elif abs_diff > 2.0:
-                eval_msg = f"스펙 대비 {abs_diff:+.2f}%p 높게 측정되었습니다. 농축 또는 칭량 오차를 점검하세요."
+                st.caption(
+                    f"🔴 **분석**: 스펙 대비 당 함량이 **{abs_diff:.2f}%p 높게 역산**되었습니다. 원료 저장 중 수분 증발(농축) 또는 제조사 품질 편차가 의심됩니다."
+                )
             else:
-                eval_msg = f"스펙 대비 {abs_diff:+.2f}%p 낮게 측정되었습니다. 흡습/열화 가능성을 점검하세요."
-            st.markdown(
-                f"- **{complex_source_name} 품질 변동**: {eval_msg}"
+                st.caption(
+                    f"🔴 **분석**: 스펙 대비 당 함량이 **{abs(abs_diff):.2f}%p 낮게 역산**되었습니다. 원료 흡습, 보관 중 열화 또는 고형분 침전 현상을 확인하세요."
+                )
+
+        st.markdown("#### 3️⃣ 공정 및 칭량 오차 검증")
+        total_spec_target = sum(target_sugar_dict.values())
+        diff_total = total_measured_sugar - total_spec_target
+        st.markdown(
+            f"- **설정 목표 총당**: `{total_spec_target:.2f}%` ➡️ **HPLC 실측 총당**: `{total_measured_sugar:.2f}%` (`{diff_total:+.2f}%p` 차이)"
+        )
+        if abs(diff_total) > 0.5:
+            st.caption(
+                "⚠️ **주의**: 실측 총당과의 차이가 0.5%p 이상 발생했습니다. 칭량 과정에서의 스케일 오차, 용수 부피 오차, 또는 멸균 후 증발 농축 여부를 재검증하세요."
             )
 
     st.markdown("---")
