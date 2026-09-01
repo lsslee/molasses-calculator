@@ -13,6 +13,25 @@ MW_GLU = 180.16
 MW_FRU = 180.16
 MW_SUC = 342.30
 
+# 대표 평균 농도 상수
+DEFAULT_REF_SUC, DEFAULT_REF_GLU, DEFAULT_REF_FRU = 6.12, 6.04, 6.36
+DEFAULT_MOL_SUC, DEFAULT_MOL_GLU, DEFAULT_MOL_FRU = 24.80, 7.00, 8.20
+
+# --- CALLBACK FUNCTIONS (체크박스 변경 시 강제 값 갱신) ---
+def update_ref_spec():
+    if st.session_state.get("check_auto_ref", False):
+        st.session_state["ref_suc"] = DEFAULT_REF_SUC
+        st.session_state["ref_glu"] = DEFAULT_REF_GLU
+        st.session_state["ref_fru"] = DEFAULT_REF_FRU
+
+
+def update_mol_spec():
+    if st.session_state.get("check_auto_mol", False):
+        st.session_state["mol_suc"] = DEFAULT_MOL_SUC
+        st.session_state["mol_glu"] = DEFAULT_MOL_GLU
+        st.session_state["mol_fru"] = DEFAULT_MOL_FRU
+
+
 # Custom CSS
 st.markdown(
     """
@@ -113,6 +132,7 @@ with col_input:
                     value=3.5 if idx == 0 else 3.5,
                     step=0.1,
                     min_value=0.0,
+                    key=f"target_sugar_{src}",
                 )
 
         sum_target_sugar = sum(target_sugar_dict.values())
@@ -142,22 +162,19 @@ with col_input:
 
     p_glu = 91.0
     p_liq = 75.0
-
-    # 기본 평균 농도 (필요 시 보정값을 곱한 수치로 직접 수정 가능)
-    DEFAULT_REF_SUC, DEFAULT_REF_GLU, DEFAULT_REF_FRU = 6.12, 6.04, 6.36
-    DEFAULT_MOL_SUC, DEFAULT_MOL_GLU, DEFAULT_MOL_FRU = 24.80, 7.00, 8.20
-
-    use_auto_ref_spec = False
-    use_auto_mol_spec = False
     correction_factor = 1.0
 
     if "포도당" in selected_sources:
         st.subheader("📌 포도당 스펙")
-        p_glu = st.number_input("포도당 순도 (%)", value=91.0, step=0.1)
+        p_glu = st.number_input(
+            "포도당 순도 (%)", value=91.0, step=0.1, key="p_glu"
+        )
 
     if "액당" in selected_sources:
         st.subheader("📌 액당 스펙")
-        p_liq = st.number_input("액당 순도/고형분 (%)", value=75.0, step=0.1)
+        p_liq = st.number_input(
+            "액당 순도/고형분 (%)", value=75.0, step=0.1, key="p_liq"
+        )
 
     if "정제당" in selected_sources:
         st.subheader("📌 정제당 스펙")
@@ -165,16 +182,15 @@ with col_input:
             "정제당 세부 스펙을 모름",
             value=False,
             key="check_auto_ref",
-            help="정제당의 대표 평균 스펙으로 자동 설정됩니다.",
+            on_change=update_ref_spec,  # 체크 여부 변경 시 콜백 실행
+            help="체크 시 정제당의 대표 평균 스펙 농도가 자동 작성되고 수정이 제한됩니다.",
         )
 
         col_ref1, col_ref2, col_ref3 = st.columns(3)
         with col_ref1:
             c_ref_suc = st.number_input(
                 "Sucrose (%)",
-                value=(
-                    DEFAULT_REF_SUC if use_auto_ref_spec else 6.12
-                ),  # 체크 시 대표 평균값 입력
+                value=DEFAULT_REF_SUC,
                 step=0.01,
                 key="ref_suc",
                 disabled=use_auto_ref_spec,
@@ -182,9 +198,7 @@ with col_input:
         with col_ref2:
             c_ref_glu = st.number_input(
                 "Glucose (%)",
-                value=(
-                    DEFAULT_REF_GLU if use_auto_ref_spec else 6.04
-                ),  # 체크 시 대표 평균값 입력
+                value=DEFAULT_REF_GLU,
                 step=0.01,
                 key="ref_glu",
                 disabled=use_auto_ref_spec,
@@ -192,9 +206,7 @@ with col_input:
         with col_ref3:
             c_ref_fru = st.number_input(
                 "Fructose (%)",
-                value=(
-                    DEFAULT_REF_FRU if use_auto_ref_spec else 6.36
-                ),  # 체크 시 대표 평균값 입력
+                value=DEFAULT_REF_FRU,
                 step=0.01,
                 key="ref_fru",
                 disabled=use_auto_ref_spec,
@@ -208,6 +220,8 @@ with col_input:
 
         ref_spec_sum = c_ref_suc + c_ref_glu + c_ref_fru
         st.success(f"🏷️ **정제당 총 스펙 순도**: **{ref_spec_sum:.2f} %**")
+    else:
+        c_ref_suc, c_ref_glu, c_ref_fru = 0.0, 0.0, 0.0
 
     if "당밀" in selected_sources:
         st.subheader("📌 당밀 스펙")
@@ -215,16 +229,15 @@ with col_input:
             "당밀 세부 스펙을 모름",
             value=False,
             key="check_auto_mol",
-            help="당밀의 대표 평균 스펙으로 자동 설정됩니다.",
+            on_change=update_mol_spec,  # 체크 여부 변경 시 콜백 실행
+            help="체크 시 당밀의 대표 평균 스펙 농도가 자동 작성되고 수정이 제한됩니다.",
         )
 
         col_mol1, col_mol2, col_mol3 = st.columns(3)
         with col_mol1:
             c_mol_suc = st.number_input(
                 "Sucrose (%)",
-                value=(
-                    DEFAULT_MOL_SUC if use_auto_mol_spec else 24.80
-                ),  # 체크 시 대표 평균값 입력
+                value=DEFAULT_MOL_SUC,
                 step=0.01,
                 key="mol_suc",
                 disabled=use_auto_mol_spec,
@@ -232,9 +245,7 @@ with col_input:
         with col_mol2:
             c_mol_glu = st.number_input(
                 "Glucose (%)",
-                value=(
-                    DEFAULT_MOL_GLU if use_auto_mol_spec else 7.00
-                ),  # 체크 시 대표 평균값 입력
+                value=DEFAULT_MOL_GLU,
                 step=0.01,
                 key="mol_glu",
                 disabled=use_auto_mol_spec,
@@ -242,9 +253,7 @@ with col_input:
         with col_mol3:
             c_mol_fru = st.number_input(
                 "Fructose (%)",
-                value=(
-                    DEFAULT_MOL_FRU if use_auto_mol_spec else 8.20
-                ),  # 체크 시 대표 평균값 입력
+                value=DEFAULT_MOL_FRU,
                 step=0.01,
                 key="mol_fru",
                 disabled=use_auto_mol_spec,
@@ -258,6 +267,8 @@ with col_input:
 
         mol_spec_sum = c_mol_suc + c_mol_glu + c_mol_fru
         st.success(f"🏷️ **당밀 총 스펙 순도**: **{mol_spec_sum:.2f} %**")
+    else:
+        c_mol_suc, c_mol_glu, c_mol_fru = 0.0, 0.0, 0.0
 
     # ---------------------------------------------------------
     # Section 4. 배양액 0h 샘플 HPLC 측정 결과 입력
@@ -268,11 +279,17 @@ with col_input:
     )
     col_h1, col_h2, col_h3 = st.columns(3)
     with col_h1:
-        hplc_suc = st.number_input("Sucrose (w/v%)", value=1.00, step=0.1)
+        hplc_suc = st.number_input(
+            "Sucrose (w/v%)", value=1.00, step=0.1, key="hplc_suc"
+        )
     with col_h2:
-        hplc_glu = st.number_input("Glucose (w/v%)", value=4.76, step=0.1)
+        hplc_glu = st.number_input(
+            "Glucose (w/v%)", value=4.76, step=0.1, key="hplc_glu"
+        )
     with col_h3:
-        hplc_fru = st.number_input("Fructose (w/v%)", value=1.76, step=0.1)
+        hplc_fru = st.number_input(
+            "Fructose (w/v%)", value=1.76, step=0.1, key="hplc_fru"
+        )
 
     calc_button = st.button("🚀 당농도 역산 및 리포트 생성", use_container_width=True)
 
