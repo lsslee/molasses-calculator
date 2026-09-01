@@ -72,31 +72,17 @@ st.markdown(
 
 st.title("🧪 다중 당원 배지 당농도 역산 & 자동 분석 시스템")
 st.markdown(
-    "설정된 5단계 입력 순서에 따라 조건 및 HPLC 측정 데이터를 입력하고 역산 결과를 확인하세요."
+    "설정된 입력 순서에 따라 조건 및 HPLC 측정 데이터를 입력하고 역산 결과를 확인하세요."
 )
 
 col_input, col_report = st.columns([1.1, 0.9])
 
 with col_input:
     # ---------------------------------------------------------
-    # Section 1. 배지 목표 총당 입력
+    # Section 1. 당원 종류 선택 (기존 2번 -> 1번으로 변경)
     # ---------------------------------------------------------
     st.markdown(
-        '<div class="section-header">1. 배지 목표 총당 입력</div>',
-        unsafe_allow_html=True,
-    )
-    target_total_sugar = st.number_input(
-        "목표 총 당농도 (w/v%)",
-        value=7.0,
-        step=0.1,
-        help="예시) 7%",
-    )
-
-    # ---------------------------------------------------------
-    # Section 2. 당원 종류 선택
-    # ---------------------------------------------------------
-    st.markdown(
-        '<div class="section-header">2. 당원 종류 선택</div>',
+        '<div class="section-header">1. 당원 종류 선택</div>',
         unsafe_allow_html=True,
     )
     selected_sources = st.multiselect(
@@ -106,24 +92,25 @@ with col_input:
     )
 
     # ---------------------------------------------------------
-    # Section 3. 당원별 목표 당농도 입력 및 구성 비율 산출
+    # Section 2. 당원별 목표 당농도 입력 및 합산 총당/비율 자동 계산 (기존 3번 -> 2번으로 변경)
     # ---------------------------------------------------------
     st.markdown(
-        '<div class="section-header">3. 당원별 목표 당농도 입력</div>',
+        '<div class="section-header">2. 당원별 목표 당농도 입력</div>',
         unsafe_allow_html=True,
     )
 
     target_sugar_dict = {}
+    sum_target_sugar = 0.0
+
     if selected_sources:
         st.caption("각 당원이 담당할 목표 당농도(w/v%)를 입력하세요.")
         ratio_cols = st.columns(len(selected_sources))
-        default_val = round(target_total_sugar / len(selected_sources), 2)
 
         for idx, src in enumerate(selected_sources):
             with ratio_cols[idx]:
                 target_sugar_dict[src] = st.number_input(
                     f"{src} 목표 농도 (%)",
-                    value=default_val,
+                    value=3.5 if idx == 0 else 3.5,
                     step=0.1,
                     min_value=0.0,
                 )
@@ -136,26 +123,20 @@ with col_input:
                 pct = (val / sum_target_sugar) * 100
                 ratio_parts.append(f"**{src}**: {pct:.1f}% ({val:.2f}%)")
 
-            st.info(f"💡 **당원 구성 비율**: {' | '.join(ratio_parts)}")
-
-            if abs(sum_target_sugar - target_total_sugar) > 0.01:
-                st.warning(
-                    f"⚠️ 입력된 당원 농도 합계({sum_target_sugar:.2f}%)가 Section 1의 목표 총당({target_total_sugar:.2f}%)과 다릅니다."
-                )
-            else:
-                st.success(
-                    f"✅ 당원 농도 합계가 목표 총당({target_total_sugar:.2f}%)과 일치합니다."
-                )
+            st.success(
+                f"🎯 **합산 총당 농도**: **{sum_target_sugar:.2f} w/v%**"
+            )
+            st.info(f"💡 **당원별 구성 비율**: {' | '.join(ratio_parts)}")
         else:
             st.warning("⚠️ 1개 이상의 당원 농도를 0% 초과로 입력해 주세요.")
     else:
         st.warning("⚠️ 당원 종류를 1개 이상 선택해 주세요.")
 
     # ---------------------------------------------------------
-    # Section 4. 당원 스펙 입력
+    # Section 3. 당원 스펙 입력 (기존 4번 -> 3번으로 변경)
     # ---------------------------------------------------------
     st.markdown(
-        '<div class="section-header">4. 당원 스펙 입력</div>',
+        '<div class="section-header">3. 당원 스펙 입력</div>',
         unsafe_allow_html=True,
     )
 
@@ -219,10 +200,10 @@ with col_input:
         )
 
     # ---------------------------------------------------------
-    # Section 5. 배양액 0h 샘플 HPLC 측정 결과 입력
+    # Section 4. 배양액 0h 샘플 HPLC 측정 결과 입력 (기존 5번 -> 4번으로 변경)
     # ---------------------------------------------------------
     st.markdown(
-        '<div class="section-header">5. 배양액 0h 샘플 HPLC 측정 결과 입력</div>',
+        '<div class="section-header">4. 배양액 0h 샘플 HPLC 측정 결과 입력</div>',
         unsafe_allow_html=True,
     )
     col_h1, col_h2, col_h3 = st.columns(3)
@@ -365,7 +346,7 @@ if calc_button or "res" in st.session_state:
 
     # --- 우측 칼럼 결과 리포트 ---
     with col_report:
-        st.subheader("📊 6. 역산 결과 리포트")
+        st.subheader("📊 5. 역산 결과 리포트")
 
         if complex_source_name != "복합당원":
             m1, m2 = st.columns([1, 1.3])
@@ -510,10 +491,9 @@ if calc_button or "res" in st.session_state:
                 )
 
         st.markdown("#### 3️⃣ 공정 및 칭량 오차 검증")
-        total_spec_target = sum(target_sugar_dict.values())
-        diff_total = total_measured_sugar - total_spec_target
+        diff_total = total_measured_sugar - sum_target_sugar
         st.markdown(
-            f"- **설정 목표 총당**: `{total_spec_target:.2f}%` ➡️ **HPLC 실측 총당**: `{total_measured_sugar:.2f}%` (`{diff_total:+.2f}%p` 차이)"
+            f"- **목표 설정 총당**: `{sum_target_sugar:.2f}%` ➡️ **HPLC 실측 총당**: `{total_measured_sugar:.2f}%` (`{diff_total:+.2f}%p` 차이)"
         )
         if abs(diff_total) > 0.5:
             st.caption(
@@ -523,7 +503,7 @@ if calc_button or "res" in st.session_state:
     st.markdown("---")
 
     # ---------------------------------------------------------
-    # Section 7. Step별 상세 계산 과정 토글 영역
+    # Section 6. Step별 상세 계산 과정 토글 영역
     # ---------------------------------------------------------
     with st.expander(
         "🔍 자세한 Step별 계산 과정 및 데이터 보기 (클릭 시 펼침)",
