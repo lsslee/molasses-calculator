@@ -166,26 +166,37 @@ with col_input:
             help="K-PARK2 정제당의 평균 스펙으로 계산",
         )
 
+        col_ref1, col_ref2, col_ref3 = st.columns(3)
+        with col_ref1:
+            c_ref_suc = st.number_input(
+                "Sucrose (%)",
+                value=6.12,
+                step=0.01,
+                key="ref_suc",
+                disabled=use_auto_ref_spec,
+            )
+        with col_ref2:
+            c_ref_glu = st.number_input(
+                "Glucose (%)",
+                value=6.04,
+                step=0.01,
+                key="ref_glu",
+                disabled=use_auto_ref_spec,
+            )
+        with col_ref3:
+            c_ref_fru = st.number_input(
+                "Fructose (%)",
+                value=6.36,
+                step=0.01,
+                key="ref_fru",
+                disabled=use_auto_ref_spec,
+            )
+
         if use_auto_ref_spec:
-            c_ref_suc, c_ref_glu, c_ref_fru = 6.12, 6.04, 6.36
             correction_factor = 1.030
             st.warning(
                 "⚠️ 세부 스펙 미입력 시 분석 데이터 특성에 따라 오차가 발생하여 결과가 부정확할 수 있습니다."
             )
-        else:
-            col_ref1, col_ref2, col_ref3 = st.columns(3)
-            with col_ref1:
-                c_ref_suc = st.number_input(
-                    "Sucrose (%)", value=6.12, step=0.1, key="ref_suc"
-                )
-            with col_ref2:
-                c_ref_glu = st.number_input(
-                    "Glucose (%)", value=6.04, step=0.1, key="ref_glu"
-                )
-            with col_ref3:
-                c_ref_fru = st.number_input(
-                    "Fructose (%)", value=6.36, step=0.1, key="ref_fru"
-                )
 
         ref_spec_sum = c_ref_suc + c_ref_glu + c_ref_fru
         st.success(f"🏷️ **정제당 총 스펙 순도**: **{ref_spec_sum:.2f} %**")
@@ -199,26 +210,37 @@ with col_input:
             help="K-PARK2 정제당의 평균 스펙으로 계산",
         )
 
+        col_mol1, col_mol2, col_mol3 = st.columns(3)
+        with col_mol1:
+            c_mol_suc = st.number_input(
+                "Sucrose (%)",
+                value=24.80,
+                step=0.01,
+                key="mol_suc",
+                disabled=use_auto_mol_spec,
+            )
+        with col_mol2:
+            c_mol_glu = st.number_input(
+                "Glucose (%)",
+                value=7.00,
+                step=0.01,
+                key="mol_glu",
+                disabled=use_auto_mol_spec,
+            )
+        with col_mol3:
+            c_mol_fru = st.number_input(
+                "Fructose (%)",
+                value=8.20,
+                step=0.01,
+                key="mol_fru",
+                disabled=use_auto_mol_spec,
+            )
+
         if use_auto_mol_spec:
-            c_mol_suc, c_mol_glu, c_mol_fru = 24.8, 7.0, 8.2
             correction_factor = 1.031
             st.warning(
                 "⚠️ 세부 스펙 미입력 시 분석 데이터 특성에 따라 오차가 발생하여 결과가 부정확할 수 있습니다."
             )
-        else:
-            col_mol1, col_mol2, col_mol3 = st.columns(3)
-            with col_mol1:
-                c_mol_suc = st.number_input(
-                    "Sucrose (%)", value=24.8, step=0.1, key="mol_suc"
-                )
-            with col_mol2:
-                c_mol_glu = st.number_input(
-                    "Glucose (%)", value=7.0, step=0.1, key="mol_glu"
-                )
-            with col_mol3:
-                c_mol_fru = st.number_input(
-                    "Fructose (%)", value=8.2, step=0.1, key="mol_fru"
-                )
 
         mol_spec_sum = c_mol_suc + c_mol_glu + c_mol_fru
         st.success(f"🏷️ **당밀 총 스펙 순도**: **{mol_spec_sum:.2f} %**")
