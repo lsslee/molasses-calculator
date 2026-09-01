@@ -3,8 +3,8 @@ import streamlit as st
 
 # --- PAGE CONFIG ---
 st.set_page_config(
-    page_title="다중 당원 배지 당농도 역산 & 분석 시스템",
-    page_icon="🧪",
+    page_title="배지 당원 역산 및 공정 품질 진단 시스템",
+    page_icon="🔬",
     layout="wide",
 )
 
@@ -16,6 +16,7 @@ MW_SUC = 342.30
 # 대표 평균 농도 상수
 DEFAULT_REF_SUC, DEFAULT_REF_GLU, DEFAULT_REF_FRU = 6.12, 6.04, 6.36
 DEFAULT_MOL_SUC, DEFAULT_MOL_GLU, DEFAULT_MOL_FRU = 24.80, 7.00, 8.20
+
 
 # --- CALLBACK FUNCTIONS (체크박스 변경 시 강제 값 갱신) ---
 def update_ref_spec():
@@ -89,9 +90,10 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-st.title("🧪 다중 당원 배지 당농도 역산 & 자동 분석 시스템")
+# 메인 타이틀 & 부타이틀 수정
+st.title("🔬 배지 당원 역산 및 공정 품질 진단 시스템")
 st.markdown(
-    "설정된 입력 순서에 따라 조건 및 HPLC 측정 데이터를 입력하고 역산 결과를 확인하세요."
+    "원원료 칭량 조건과 멸균 후(0h) HPLC 분석 데이터를 기반으로 실제 당농도를 역산하고, 원료 품질 및 공정 편차를 진단합니다."
 )
 
 col_input, col_report = st.columns([1.1, 0.9])
@@ -101,7 +103,7 @@ with col_input:
     # Section 1. 당원 종류 선택
     # ---------------------------------------------------------
     st.markdown(
-        '<div class="section-header">1. 당원 종류 선택</div>',
+        '<div class="section-header">1. 배지 투입 당원 선택</div>',
         unsafe_allow_html=True,
     )
     selected_sources = st.multiselect(
@@ -114,7 +116,7 @@ with col_input:
     # Section 2. 당원별 당농도 입력 및 합산 총당/비율 자동 계산
     # ---------------------------------------------------------
     st.markdown(
-        '<div class="section-header">2. 당원별 당농도 입력</div>',
+        '<div class="section-header">2. 당원별 설정 농도 입력</div>',
         unsafe_allow_html=True,
     )
 
@@ -122,7 +124,7 @@ with col_input:
     sum_target_sugar = 0.0
 
     if selected_sources:
-        st.caption("각 당원의 농도를 입력해주세요.")
+        st.caption("각 당원의 목표 배지 농도를 입력해주세요.")
         ratio_cols = st.columns(len(selected_sources))
 
         for idx, src in enumerate(selected_sources):
@@ -144,9 +146,9 @@ with col_input:
                 ratio_parts.append(f"**{src}**: {pct:.1f}% ({val:.2f}%)")
 
             st.success(
-                f"🎯 **합산 총당 농도**: **{sum_target_sugar:.2f} w/v%**"
+                f"🎯 **합산 목표 총당 농도**: **{sum_target_sugar:.2f} w/v%**"
             )
-            st.info(f"💡 **당원별 구성 비율**: {' | '.join(ratio_parts)}")
+            st.info(f"💡 **설정 당원별 구성 비율**: {' | '.join(ratio_parts)}")
         else:
             st.warning("⚠️ 1개 이상의 당원 농도를 0% 초과로 입력해 주세요.")
     else:
@@ -156,7 +158,7 @@ with col_input:
     # Section 3. 당원 스펙 입력
     # ---------------------------------------------------------
     st.markdown(
-        '<div class="section-header">3. 당원 스펙 입력</div>',
+        '<div class="section-header">3. 원원료 스펙(순도 및 구성) 입력</div>',
         unsafe_allow_html=True,
     )
 
@@ -274,7 +276,7 @@ with col_input:
     # Section 4. 배양액 0h 샘플 HPLC 측정 결과 입력
     # ---------------------------------------------------------
     st.markdown(
-        '<div class="section-header">4. 배양액 0h 샘플 HPLC 측정 결과 입력</div>',
+        '<div class="section-header">4. 멸균 후(0h) 배양액 HPLC 실측값 입력</div>',
         unsafe_allow_html=True,
     )
     col_h1, col_h2, col_h3 = st.columns(3)
@@ -427,7 +429,8 @@ if calc_button or "res" in st.session_state:
 
     # --- 우측 칼럼 결과 리포트 ---
     with col_report:
-        st.subheader("📊 5. 역산 결과 리포트")
+        # 서브제목 수정
+        st.subheader("📊 5. 실측 역산 결과 및 기여도 리포트")
 
         if complex_source_name != "복합당원":
             m1, m2 = st.columns([1, 1.3])
@@ -516,7 +519,7 @@ if calc_button or "res" in st.session_state:
         # ---------------------------------------------------------
         # 상세 공정 및 당원 특성 리포트
         # ---------------------------------------------------------
-        st.subheader("📋 상세 공정 및 당원 특성 리포트")
+        st.subheader("📋 공정 진단 및 원료 품질 종합 리포트")
 
         # 1. Sucrose 가수분해율 계산
         complex_suc_spec = (
@@ -587,7 +590,7 @@ if calc_button or "res" in st.session_state:
     # Section 6. Step별 상세 계산 과정 토글 영역
     # ---------------------------------------------------------
     with st.expander(
-        "🔍 자세한 Step별 계산 과정 및 데이터 보기 (클릭 시 펼침)",
+        "🔍 단계별 수식 및 검증 데이터 상세 보기 (클릭 시 펼침)",
         expanded=False,
     ):
         st.markdown("### 📐 단계별 상세 역산 가이드")
