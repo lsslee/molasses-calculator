@@ -1,3 +1,4 @@
+import time
 import pandas as pd
 import streamlit as st
 from google import genai
@@ -158,19 +159,33 @@ if calc_button or "res" in st.session_state:
         )
     else:
         if st.button("🤖 AI 해석 생성하기"):
-            try:
-                client = genai.Client(api_key=api_key_input)
-                prompt = f"""당신은 미생물 배양 공정 전문가입니다. 아래 역산 결과를 바탕으로 해석 리포트를 작성해주세요.
-                - 당밀 스펙: {res['nominal_molasses_purity']}%, 역산된 실제 당농도: {res['actual_molasses_purity']:.2f}% (오차율: {res['error_rate']:.2f}%)
-                - HPLC 실측: Sucrose {hplc_suc}%, Glucose {hplc_glu}%, Fructose {hplc_fru}%
-                1. 스펙 대비 역산 당농도 변동 원인 분석
-                2. Sucrose 가수분해 현황 평가
-                3. 배지 조제 및 품질 관리 한 줄 권고사항"""
+            client = genai.Client(api_key=api_key_input)
+            prompt = f"""당신은 미생물 배양 공정 전문가입니다. 아래 역산 결과를 바탕으로 해석 리포트를 작성해주세요.
+            - 당밀 스펙: {res['nominal_molasses_purity']}%, 역산된 실제 당농도: {res['actual_molasses_purity']:.2f}% (오차율: {res['error_rate']:.2f}%)
+            - HPLC 실측: Sucrose {hplc_suc}%, Glucose {hplc_glu}%, Fructose {hplc_fru}%
+            1. 스펙 대비 역산 당농도 변동 원인 분석
+            2. Sucrose 가수분해 현황 평가
+            3. 배지 조제 및 품질 관리 한 줄 권고사항"""
 
-                with st.spinner("AI 분석 중..."):
-                    response = client.models.generate_content(
-                        model="gemini-3.6-flash", contents=prompt
-                    )
-                    st.write(response.text)
-            except Exception as e:
-                st.error(f"오류 발생: {e}")
+            with st.spinner("AI 분석 중..."):
+                response_text = None
+                # 503 과부하에 대비해 최대 3회 재시도 로직 추가
+                for attempt in range(3):
+                    try:
+                        response = client.models.generate_content(
+                            model="gemini-3.6-flash", contents=prompt
+                        )
+                        response_text = response.text
+                        break
+                    except Exception as e:
+                        if "503" in str(e) and attempt < 2:
+                            time.sleep(2)  # 2초 후 재시도
+                            continue
+                        else:
+                            st.error(
+                                f"서버 응답 지연으로 생성 실패했습니다. 잠시 후 다시 시도해 주세요: {e}"
+                            )
+                            break
+
+                if response_text:
+                    st.write(response_text)
