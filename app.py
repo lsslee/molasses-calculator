@@ -1,7 +1,5 @@
-import time
 import pandas as pd
 import streamlit as st
-from google import genai
 
 # --- PAGE CONFIG ---
 st.set_page_config(
@@ -71,16 +69,56 @@ def calculate_molasses_purity(
     }
 
 
+def generate_rule_based_report(res, hplc_suc, hplc_glu, hplc_fru, c_mol_suc):
+    nominal = res["nominal_molasses_purity"]
+    actual = res["actual_molasses_purity"]
+    error = res["error_rate"]
+
+    # 1. 원인 분석
+    if abs(error) <= 5.0:
+        cause_analysis = (
+            f"역산된 실제 당농도({actual:.2f}%)가 스펙({nominal:.2f}%) 대비 "
+            f"오차 범위 내({error:+.2f}%)로 일정하게 유지되고 있습니다. 원료의 품질 변동성이 낮습니다."
+        )
+    elif error > 5.0:
+        cause_analysis = (
+            f"역산된 실제 당농도({actual:.2f}%)가 스펙({nominal:.2f}%) 대비 "
+            f"{error:+.2f}% 높게 측정되었습니다. 원료의 농축도 증가 또는 칭량 과정에서의 오차 가능성을 검토하십시오."
+        )
+    else:
+        cause_analysis = (
+            f"역산된 실제 당농도({actual:.2f}%)가 스펙({nominal:.2f}%) 대비 "
+            f"{error:+.2f}% 낮게 측정되었습니다. 정제당밀의 실효 당 함량 감소, 열열화 또는 수분 흡습 가능성이 있습니다."
+        )
+
+    # 2. Sucrose 가수분해 평가
+    # 초기 당밀 스펙 중 Sucrose 비율 기준 실측 잔여율 평가
+    if hplc_suc == 0:
+        hydrolysis_eval = (
+            "HPLC 분석 결과 Sucrose가 전혀 검출되지 않았습니다(0%). "
+            "멸균 과정 또는 조제 조건에서 **Sucrose가 100% 완전 가수분해(Glc + Fru)**된 상태입니다."
+        )
+    else:
+        hydrolysis_eval = (
+            f"Sucrose 실측값이 {hplc_suc:.2f}%로 일부 잔류하고 있습니다. "
+            "열처리 조건에 따라 일부만 가수분해되었으며 미생물 이용 속도에 영향을 줄 수 있습니다."
+        )
+
+    # 3. 권고 사항
+    if abs(error) > 10.0:
+        recommendation = "⚠️ 당밀 당농도 오차율이 10%를 초과하므로 당밀 로트(LOT) 재검수 및 HPLC 재분석을 권장합니다."
+    else:
+        recommendation = "✅ 현 당농도 역산 수치를 기반으로 차기 배지 조제 칭량 스펙을 업데이트하여 반영하십시오."
+
+    return cause_analysis, hydrolysis_eval, recommendation
+
+
 # --- UI LAYOUT ---
-st.title("🧪 정제당밀 당농도 역산 & AI 분석 시스템")
+st.title("🧪 정제당밀 당농도 역산 & 자동 분석 시스템")
 st.markdown(
     "배지 조제 조건과 HPLC 실측 결과를 바탕으로 **정제당밀의 실효 당농도**를 역산합니다."
 )
 
-st.sidebar.header("🔑 API 설정")
-api_key_input = st.sidebar.text_input("Google Gemini API Key", type="password")
-
-st.sidebar.markdown("---")
 st.sidebar.header("📋 1. 배지 목표 초당 & 순도 설정")
 target_glu = st.sidebar.number_input(
     "포도당 목표 당농도 (w/v%)", value=3.35, step=0.1
@@ -103,7 +141,7 @@ with col1:
     hplc_glu = st.number_input("Glucose 실측값 (w/v%)", value=4.76, step=0.1)
     hplc_fru = st.number_input("Fructose 실측값 (w/v%)", value=1.76, step=0.1)
 
-    calc_button = st.button("🚀 당농도 역산하기", use_container_width=True)
+    calc_button = st.button("🚀 당농도 역산 및 리포트 생성", use_container_width=True)
 
 if calc_button or "res" in st.session_state:
     res = calculate_molasses_purity(
@@ -152,40 +190,12 @@ if calc_button or "res" in st.session_state:
         st.dataframe(df_res, use_container_width=True, hide_index=True)
 
     st.markdown("---")
-    st.subheader("🤖 4. Gemini AI 해석 리포트")
-    if not api_key_input:
-        st.info(
-            "💡 사이드바에 Google Gemini API Key를 입력하시면 AI 리포트를 생성할 수 있습니다."
-        )
-    else:
-        if st.button("🤖 AI 해석 생성하기"):
-            client = genai.Client(api_key=api_key_input)
-            prompt = f"""당신은 미생물 배양 공정 전문가입니다. 아래 역산 결과를 바탕으로 해석 리포트를 작성해주세요.
-            - 당밀 스펙: {res['nominal_molasses_purity']}%, 역산된 실제 당농도: {res['actual_molasses_purity']:.2f}% (오차율: {res['error_rate']:.2f}%)
-            - HPLC 실측: Sucrose {hplc_suc}%, Glucose {hplc_glu}%, Fructose {hplc_fru}%
-            1. 스펙 대비 역산 당농도 변동 원인 분석
-            2. Sucrose 가수분해 현황 평가
-            3. 배지 조제 및 품질 관리 한 줄 권고사항"""
+    st.subheader("📋 4. 공정 해석 자동 리포트")
 
-            with st.spinner("AI 분석 중..."):
-                response_text = None
-                # 503 과부하에 대비해 최대 3회 재시도 로직 추가
-                for attempt in range(3):
-                    try:
-                        response = client.models.generate_content(
-                            model="gemini-3.6-flash", contents=prompt
-                        )
-                        response_text = response.text
-                        break
-                    except Exception as e:
-                        if "503" in str(e) and attempt < 2:
-                            time.sleep(2)  # 2초 후 재시도
-                            continue
-                        else:
-                            st.error(
-                                f"서버 응답 지연으로 생성 실패했습니다. 잠시 후 다시 시도해 주세요: {e}"
-                            )
-                            break
+    cause, hydro, reco = generate_rule_based_report(
+        res, hplc_suc, hplc_glu, hplc_fru, c_mol_suc
+    )
 
-                if response_text:
-                    st.write(response_text)
+    st.markdown(f"**1. 스펙 대비 역산 당농도 변동 분석**\n- {cause}")
+    st.markdown(f"**2. Sucrose 가수분해 평가**\n- {hydro}")
+    st.markdown(f"**3. 배지 조제 및 품질 관리 권고사항**\n- {reco}")
