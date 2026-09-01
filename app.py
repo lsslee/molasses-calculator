@@ -160,16 +160,17 @@ with col_input:
     if "정제당" in selected_sources:
         st.subheader("📌 정제당 스펙")
         use_auto_ref_spec = st.checkbox(
-            "정제당 세부 스펙을 모름 (5개 배치 데이터 평균 스펙 및 재계산된 보정 Factor 1.030 적용)",
+            "정제당 세부 스펙을 모름",
             value=False,
             key="check_auto_ref",
+            help="K-PARK2 정제당의 평균 스펙으로 계산",
         )
 
         if use_auto_ref_spec:
             c_ref_suc, c_ref_glu, c_ref_fru = 6.12, 6.04, 6.36
             correction_factor = 1.030
-            st.info(
-                "ℹ️ 5개 배치 평균 스펙 적용: **Sucrose 6.12%, Glucose 6.04%, Fructose 6.36% (총 18.52%)** / **보정 Factor 1.030** 반영"
+            st.warning(
+                "⚠️ 세부 스펙 미입력 시 분석 데이터 특성에 따라 오차가 발생하여 결과가 부정확할 수 있습니다."
             )
         else:
             col_ref1, col_ref2, col_ref3 = st.columns(3)
@@ -192,16 +193,17 @@ with col_input:
     if "당밀" in selected_sources:
         st.subheader("📌 당밀 스펙")
         use_auto_mol_spec = st.checkbox(
-            "당밀 세부 스펙을 모름 (배치 분석 데이터 스펙 및 보정 Factor 1.031 적용)",
+            "당밀 세부 스펙을 모름",
             value=False,
             key="check_auto_mol",
+            help="K-PARK2 정제당의 평균 스펙으로 계산",
         )
 
         if use_auto_mol_spec:
             c_mol_suc, c_mol_glu, c_mol_fru = 24.8, 7.0, 8.2
             correction_factor = 1.031
-            st.info(
-                "ℹ️ 배치 데이터 스펙 적용: **Sucrose 24.8%, Glucose 7.0%, Fructose 8.2% (총 40.0%)** / **보정 Factor 1.031** 반영"
+            st.warning(
+                "⚠️ 세부 스펙 미입력 시 분석 데이터 특성에 따라 오차가 발생하여 결과가 부정확할 수 있습니다."
             )
         else:
             col_mol1, col_mol2, col_mol3 = st.columns(3)
@@ -348,7 +350,6 @@ if calc_button or "res" in st.session_state:
         "nominal_complex_purity": nominal_complex_purity,
         "raw_actual_purity": raw_actual_purity,
         "actual_complex_purity": actual_complex_purity,
-        "correction_factor": correction_factor,
         "abs_diff": abs_diff,
         "m_suc_meas": m_suc_meas,
         "m_glu_meas": m_glu_meas,
@@ -383,15 +384,10 @@ if calc_button or "res" in st.session_state:
                     f"{nominal_complex_purity:.2f}%",
                 )
             with m2:
-                factor_text = (
-                    f" (보정 Factor {correction_factor} 적용)"
-                    if correction_factor > 1.0
-                    else ""
-                )
                 st.markdown(
                     f"""
                     <div class="highlight-card">
-                        <div class="highlight-title">🎯 역산된 {complex_source_name} 실제 당농도{factor_text}</div>
+                        <div class="highlight-title">🎯 역산된 {complex_source_name} 실제 당농도</div>
                         <div class="highlight-value">{actual_complex_purity:.2f}%</div>
                         <div class="highlight-delta">스펙 대비 차이: {abs_diff:+.2f}%p</div>
                     </div>
@@ -687,7 +683,7 @@ if calc_button or "res" in st.session_state:
         st.markdown(
             f"""<div class="step-card">
             <div class="step-title">[Step 4] 최종 {complex_source_name} 당농도 순도 및 차이 산출 (%)</div>
-            {complex_source_name} 투입량 대비 역산된 당 질량을 통해 실제 농도(순도) 및 스펙 대비 차이(%p)를 최종 계산합니다. (보정 Factor {res['correction_factor']} 반영)
+            {complex_source_name} 투입량 대비 역산된 당 질량을 통해 실제 농도(순도) 및 스펙 대비 차이(%p)를 최종 계산합니다.
         </div>""",
             unsafe_allow_html=True,
         )
