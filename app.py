@@ -169,7 +169,7 @@ if calc_button or "res" in st.session_state:
 
                 with st.spinner("AI 분석 중..."):
                     response = client.models.generate_content(
-                        model="gemini-2.5-flash", contents=prompt
+                        model="gemini-2.0-flash", contents=prompt
                     )
                     st.write(response.text)
             except Exception as e:
