@@ -27,6 +27,19 @@ st.markdown(
         margin-top: 20px;
         margin-bottom: 15px;
     }
+    .step-card {
+        background-color: #f8f9fa;
+        border-left: 5px solid #4B7BEC;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 15px;
+    }
+    .step-title {
+        color: #2D98DA;
+        font-weight: bold;
+        font-size: 1.1rem;
+        margin-bottom: 8px;
+    }
     .highlight-card {
         background-color: #eef5ff;
         border: 2px solid #3867d6;
@@ -168,7 +181,7 @@ with col_input:
 
         ref_spec_sum = c_ref_suc + c_ref_glu + c_ref_fru
         st.number_input(
-            "🔒 정제당 스펙 당농도 합계 (%)",
+            "🔒 정제당 순도 (%)",
             value=float(ref_spec_sum),
             disabled=True,
         )
@@ -191,7 +204,7 @@ with col_input:
 
         mol_spec_sum = c_mol_suc + c_mol_glu + c_mol_fru
         st.number_input(
-            "🔒 당밀 스펙 당농도 합계 (%)",
+            "🔒 당밀 순도 (%)",
             value=float(mol_spec_sum),
             disabled=True,
         )
@@ -274,10 +287,12 @@ if calc_button or "res" in st.session_state:
     complex_source_name = "복합당원"
     nominal_complex_purity = 0.0
     actual_complex_purity = 0.0
+    g_l_complex = 0.0
 
     if "정제당" in selected_sources and "당밀" not in selected_sources:
         complex_source_name = "정제당"
         nominal_complex_purity = ref_nominal_total
+        g_l_complex = g_l_ref
         c_ref_actual_mass = m_remaining * MW_GLU
         actual_complex_purity = (
             (c_ref_actual_mass / g_l_ref) * 100.0 if g_l_ref > 0 else 0.0
@@ -285,9 +300,19 @@ if calc_button or "res" in st.session_state:
     elif "당밀" in selected_sources and "정제당" not in selected_sources:
         complex_source_name = "당밀"
         nominal_complex_purity = mol_nominal_total
+        g_l_complex = g_l_mol
         c_mol_actual_mass = m_remaining * MW_GLU
         actual_complex_purity = (
             (c_mol_actual_mass / g_l_mol) * 100.0 if g_l_mol > 0 else 0.0
+        )
+    elif "당밀" in selected_sources and "정제당" in selected_sources:
+        complex_source_name = "당밀/정제당"
+        nominal_complex_purity = mol_nominal_total
+        g_l_complex = g_l_mol
+        mol_share = target_mol / (target_mol + target_ref)
+        mol_allocated_mass = (m_remaining * MW_GLU) * mol_share
+        actual_complex_purity = (
+            (mol_allocated_mass / g_l_mol) * 100.0 if g_l_mol > 0 else 0.0
         )
 
     abs_diff = actual_complex_purity - nominal_complex_purity
@@ -314,6 +339,7 @@ if calc_button or "res" in st.session_state:
         "g_l_liq": g_l_liq,
         "g_l_ref": g_l_ref,
         "g_l_mol": g_l_mol,
+        "g_l_complex": g_l_complex,
     }
     st.session_state["res"] = res
 
@@ -325,7 +351,7 @@ if calc_button or "res" in st.session_state:
             m1, m2 = st.columns([1, 1.3])
             with m1:
                 st.metric(
-                    f"{complex_source_name} 스펙 당농도",
+                    f"{complex_source_name} 스펙 순도",
                     f"{nominal_complex_purity:.2f}%",
                 )
             with m2:
@@ -394,3 +420,171 @@ if calc_button or "res" in st.session_state:
             st.markdown(
                 f"- **{complex_source_name} 품질 변동**: {eval_msg}"
             )
+
+    st.markdown("---")
+
+    # ---------------------------------------------------------
+    # Section 7. Step별 상세 계산 과정 토글 영역 (복원 완료)
+    # ---------------------------------------------------------
+    with st.expander(
+        "🔍 자세한 Step별 계산 과정 및 데이터 보기 (클릭 시 펼침)",
+        expanded=False,
+    ):
+        st.markdown("### 📐 단계별 상세 역산 가이드")
+
+        # Step 1
+        st.markdown(
+            """<div class="step-card">
+            <div class="step-title">[Step 1] 원료 투입량 및 멸균 후 총 당 몰수 산출</div>
+            선택된 원료의 순도를 감안한 실제 칭량 투입량(g/L)과 HPLC 측정값 기반의 몰농도를 산출합니다.
+        </div>""",
+            unsafe_allow_html=True,
+        )
+
+        s1_col1, s1_col2 = st.columns(2)
+        with s1_col1:
+            st.caption("📌 **원료별 실제 칭량 투입량 (g/L)**")
+            input_list = []
+            if "포도당" in selected_sources:
+                input_list.append(
+                    [
+                        "포도당",
+                        f"{res['actual_glu_pct']:.4f} %",
+                        f"{res['g_l_glu']:.2f} g/L",
+                    ]
+                )
+            if "액당" in selected_sources:
+                input_list.append(
+                    [
+                        "액당",
+                        f"{res['actual_liq_pct']:.4f} %",
+                        f"{res['g_l_liq']:.2f} g/L",
+                    ]
+                )
+            if "정제당" in selected_sources:
+                input_list.append(
+                    [
+                        "정제당",
+                        f"{res['actual_ref_pct']:.4f} %",
+                        f"{res['g_l_ref']:.2f} g/L",
+                    ]
+                )
+            if "당밀" in selected_sources:
+                input_list.append(
+                    [
+                        "당밀",
+                        f"{res['actual_mol_pct']:.4f} %",
+                        f"{res['g_l_mol']:.2f} g/L",
+                    ]
+                )
+
+            df_step1_input = pd.DataFrame(
+                input_list, columns=["당원", "칭량 비율(w/v%)", "칭량 농도(g/L)"]
+            )
+            st.dataframe(
+                df_step1_input, use_container_width=True, hide_index=True
+            )
+
+        with s1_col2:
+            st.caption("📌 **HPLC 실측 당의 C6 등가 몰농도 (mol/L)**")
+            df_step1_hplc = pd.DataFrame(
+                [
+                    ["Sucrose", f"{hplc_suc:.2f} %", f"{res['m_suc_meas']:.4f} mol/L"],
+                    ["Glucose", f"{hplc_glu:.2f} %", f"{res['m_glu_meas']:.4f} mol/L"],
+                    [
+                        "Fructose",
+                        f"{hplc_fru:.2f} %",
+                        f"{res['m_fru_meas']:.4f} mol/L",
+                    ],
+                    [
+                        "총 C6 등가 몰수합",
+                        "-",
+                        f"**{res['m_total_meas']:.4f} mol/L**",
+                    ],
+                ],
+                columns=["성분", "HPLC 측정값", "몰농도 (mol/L)"],
+            )
+            st.dataframe(
+                df_step1_hplc, use_container_width=True, hide_index=True
+            )
+
+        st.markdown("---")
+
+        # Step 2
+        st.markdown(
+            f"""<div class="step-card">
+            <div class="step-title">[Step 2] 단일 당원 유래 몰농도 분리 & 차감</div>
+            HPLC 총 몰수에서 단일 당원(포도당/액당) 투입분을 차감하여 {complex_source_name} 유래 몰수만 추출합니다.
+        </div>""",
+            unsafe_allow_html=True,
+        )
+
+        s2_col1, s2_col2 = st.columns([2, 1])
+        with s2_col1:
+            st.latex(
+                r"M_{\text{"
+                + complex_source_name
+                + r" 유래}} = M_{\text{HPLC 총몰수}} - M_{\text{포도당}} - M_{\text{액당}}"
+            )
+            step2_list = [
+                ["HPLC 총 C6 등가 몰수", f"{res['m_total_meas']:.4f} mol/L"]
+            ]
+            if "포도당" in selected_sources:
+                step2_list.append(
+                    ["포도당 유래 몰수 차감액", f"- {res['m_glu_powder']:.4f} mol/L"]
+                )
+            if "액당" in selected_sources:
+                step2_list.append(
+                    ["액당 유래 몰수 차감액", f"- {res['m_liq_contrib']:.4f} mol/L"]
+                )
+
+            step2_list.append(
+                [
+                    f"{complex_source_name} 유래 순수 몰수",
+                    f"**{res['m_remaining']:.4f} mol/L**",
+                ]
+            )
+
+            df_step2 = pd.DataFrame(step2_list, columns=["구분", "몰농도 (mol/L)"])
+            st.dataframe(df_step2, use_container_width=True, hide_index=True)
+
+        st.markdown("---")
+
+        # Step 3
+        st.markdown(
+            f"""<div class="step-card">
+            <div class="step-title">[Step 3] {complex_source_name} 유래 당 농도 역산 (g/L)</div>
+            차감 후 잔여 몰농도를 질량 농도(g/L)로 환산합니다.
+        </div>""",
+            unsafe_allow_html=True,
+        )
+        st.latex(
+            r"\text{"
+            + complex_source_name
+            + r" 유래 당 농도 (g/L)} = M_{\text{"
+            + complex_source_name
+            + r" 유래 (mol/L)}} \times 180.16"
+        )
+        complex_g_l = res["m_remaining"] * MW_GLU
+        st.info(
+            f"💡 **역산된 {complex_source_name} 유래 당 농도**: `{complex_g_l:.2f} g/L`"
+        )
+
+        st.markdown("---")
+
+        # Step 4
+        st.markdown(
+            f"""<div class="step-card">
+            <div class="step-title">[Step 4] 최종 {complex_source_name} 당농도 순도 및 차이 산출 (%)</div>
+            {complex_source_name} 투입량 대비 역산된 당 질량을 통해 실제 농도(순도) 및 스펙 대비 차이(%p)를 최종 계산합니다.
+        </div>""",
+            unsafe_allow_html=True,
+        )
+        s4_col1, s4_col2 = st.columns(2)
+        with s4_col1:
+            st.metric(
+                f"역산된 {complex_source_name} 당농도(순도)",
+                f"{res['actual_complex_purity']:.2f}%",
+            )
+        with s4_col2:
+            st.metric("스펙 대비 차이", f"{abs_diff:+.2f}%p")
