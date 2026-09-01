@@ -48,6 +48,14 @@ selected_sources = st.sidebar.multiselect(
     default=["포도당", "정제당"],
 )
 
+# 오차 표시 방식 선택 (절대 차이 vs 상대 오차)
+diff_mode = st.sidebar.radio(
+    "오차율 표시 방식 선택",
+    ["절대 차이 (%p)", "상대 오차 (%)"],
+    index=0,
+    help="절대 차이: 실제 농도 - 스펙 농도 (%p)\n상대 오차: (실제 농도 - 스펙 농도) / 스펙 농도 * 100 (%)",
+)
+
 # 기본값 초기화
 target_glu, p_glu = 0.0, 91.0
 target_liq, p_liq = 0.0, 75.0
@@ -151,11 +159,10 @@ if calc_button or "res" in st.session_state:
 
     m_remaining = max(0.0, m_total_meas - m_glu_powder - m_liq_contrib)
 
-    # 복합 당원 대표값 설정
+    # 복합 당원 명칭 및 계산 동기화
     complex_source_name = "복합당원"
     nominal_complex_purity = 0.0
     actual_complex_purity = 0.0
-    error_rate = 0.0
     g_l_complex = 0.0
 
     if "정제당" in selected_sources and "당밀" not in selected_sources:
@@ -166,12 +173,6 @@ if calc_button or "res" in st.session_state:
         actual_complex_purity = (
             (c_ref_actual_mass / g_l_ref) * 100.0 if g_l_ref > 0 else 0.0
         )
-        error_rate = (
-            ((actual_complex_purity - ref_nominal_total) / ref_nominal_total)
-            * 100.0
-            if ref_nominal_total > 0
-            else 0.0
-        )
     elif "당밀" in selected_sources and "정제당" not in selected_sources:
         complex_source_name = "당밀"
         nominal_complex_purity = mol_nominal_total
@@ -179,12 +180,6 @@ if calc_button or "res" in st.session_state:
         c_mol_actual_mass = m_remaining * MW_GLU
         actual_complex_purity = (
             (c_mol_actual_mass / g_l_mol) * 100.0 if g_l_mol > 0 else 0.0
-        )
-        error_rate = (
-            ((actual_complex_purity - mol_nominal_total) / mol_nominal_total)
-            * 100.0
-            if mol_nominal_total > 0
-            else 0.0
         )
     elif "당밀" in selected_sources and "정제당" in selected_sources:
         complex_source_name = "당밀/정제당"
@@ -195,12 +190,19 @@ if calc_button or "res" in st.session_state:
         actual_complex_purity = (
             (mol_allocated_mass / g_l_mol) * 100.0 if g_l_mol > 0 else 0.0
         )
-        error_rate = (
-            ((actual_complex_purity - mol_nominal_total) / mol_nominal_total)
-            * 100.0
-            if mol_nominal_total > 0
-            else 0.0
-        )
+
+    # 오차율 계산 (선택한 옵션에 따라)
+    abs_diff = actual_complex_purity - nominal_complex_purity
+    rel_error = (
+        (abs_diff / nominal_complex_purity) * 100.0
+        if nominal_complex_purity > 0
+        else 0.0
+    )
+
+    if diff_mode == "절대 차이 (%p)":
+        delta_str = f"{abs_diff:+.2f}%p (스펙 대비)"
+    else:
+        delta_str = f"{rel_error:+.2f}% (스펙 대비)"
 
     res = {
         "selected_sources": selected_sources,
@@ -208,7 +210,9 @@ if calc_button or "res" in st.session_state:
         "complex_source_name": complex_source_name,
         "nominal_complex_purity": nominal_complex_purity,
         "actual_complex_purity": actual_complex_purity,
-        "error_rate": error_rate,
+        "abs_diff": abs_diff,
+        "rel_error": rel_error,
+        "delta_str": delta_str,
         "m_suc_meas": m_suc_meas,
         "m_glu_meas": m_glu_meas,
         "m_fru_meas": m_fru_meas,
@@ -240,7 +244,7 @@ if calc_button or "res" in st.session_state:
             m2.metric(
                 f"역산된 {complex_source_name} 실제 당농도",
                 f"{actual_complex_purity:.2f}%",
-                delta=f"{error_rate:.2f}% (스펙 대비)",
+                delta=delta_str,
             )
         else:
             st.metric(
@@ -288,12 +292,12 @@ if calc_button or "res" in st.session_state:
     st.markdown(f"- **Sucrose 가수분해 평가**: {hydro_text}")
 
     if complex_source_name != "복합당원":
-        if abs(error_rate) <= 5.0:
-            eval_msg = f"실효 당농도가 스펙 범위 내에서 안정적으로 유지되고 있습니다 (오차 {error_rate:+.2f}%)."
-        elif error_rate > 5.0:
-            eval_msg = f"실효 당농도가 스펙 대비 {error_rate:+.2f}% 높게 측정되었습니다. 원료 농축 상태 또는 칭량 오차를 확인하십시오."
+        if abs(abs_diff) <= 2.0:
+            eval_msg = f"실효 당농도가 스펙 범위 내에서 안정적으로 유지되고 있습니다 (차이: {abs_diff:+.2f}%p)."
+        elif abs_diff > 2.0:
+            eval_msg = f"실효 당농도가 스펙 대비 {abs_diff:+.2f}%p 높게 측정되었습니다. 원료 농축 상태 또는 칭량 오차를 확인하십시오."
         else:
-            eval_msg = f"실효 당농도가 스펙 대비 {error_rate:+.2f}% 낮게 측정되었습니다. 수분 흡습 또는 열열화 가능성이 있습니다."
+            eval_msg = f"실효 당농도가 스펙 대비 {abs_diff:+.2f}%p 낮게 측정되었습니다. 수분 흡습 또는 열열화 가능성이 있습니다."
         st.markdown(
             f"- **{complex_source_name} 품질 변동 분석**: {eval_msg}"
         )
@@ -304,7 +308,7 @@ if calc_button or "res" in st.session_state:
 
     st.markdown("---")
 
-    # --- 5. Step별 상세 계산 과정 (동적 동기화 적용) ---
+    # --- 5. Step별 상세 계산 과정 ---
     with st.expander(
         "🔍 자세한 Step별 계산 과정 및 데이터 보기 (클릭 시 펼침)",
         expanded=False,
@@ -459,16 +463,6 @@ if calc_button or "res" in st.session_state:
         </div>""",
             unsafe_allow_html=True,
         )
-        st.latex(
-            r"\text{최종 "
-            + complex_source_name
-            + r" 당농도 (\%)} = \left( \frac{\text{"
-            + complex_source_name
-            + r" 유래 당 농도 (g/L)}}{\text{"
-            + complex_source_name
-            + r" 칭량 투입량 (g/L)}} \right) \times 100"
-        )
-
         s4_col1, s4_col2 = st.columns(2)
         with s4_col1:
             st.metric(
@@ -476,4 +470,4 @@ if calc_button or "res" in st.session_state:
                 f"{res['actual_complex_purity']:.2f}%",
             )
         with s4_col2:
-            st.metric("스펙 대비 오차율", f"{res['error_rate']:+.2f}%")
+            st.metric("스펙 대비 차이/오차", delta_str)
