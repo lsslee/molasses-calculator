@@ -3,7 +3,7 @@ import streamlit as st
 
 # --- PAGE CONFIG ---
 st.set_page_config(
-    page_title="배지 당원 역산 및 공정 품질 진단 시스템",
+    page_title="당원 농도 역산 · 검증 시스템",
     page_icon="🔬",
     layout="wide",
 )
@@ -93,7 +93,7 @@ st.markdown(
 # 메인 타이틀 & 부타이틀 수정
 st.title("🔬 배지 당원 역산 및 공정 품질 진단 시스템")
 st.markdown(
-    "원원료 칭량 조건과 멸균 후(0h) HPLC 분석 데이터를 기반으로 실제 당농도를 역산하고, 원료 품질 및 공정 편차를 진단합니다."
+    "실측 기반 당원 순도 역산 및 당 농도 검증 Tool"
 )
 
 col_input, col_report = st.columns([1.1, 0.9])
