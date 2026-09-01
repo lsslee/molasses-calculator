@@ -3,7 +3,7 @@ import streamlit as st
 
 # --- PAGE CONFIG ---
 st.set_page_config(
-    page_title="정제당밀 당농도 역산 계산기", page_icon="🧪", layout="wide"
+    page_title="당밀류 원료 당농도 역산 계산기", page_icon="🧪", layout="wide"
 )
 
 # --- CORE LOGIC ---
@@ -69,7 +69,9 @@ def calculate_molasses_purity(
     }
 
 
-def generate_rule_based_report(res, hplc_suc, hplc_glu, hplc_fru, c_mol_suc):
+def generate_rule_based_report(
+    res, hplc_suc, hplc_glu, hplc_fru, c_mol_suc, raw_material_type
+):
     nominal = res["nominal_molasses_purity"]
     actual = res["actual_molasses_purity"]
     error = res["error_rate"]
@@ -78,57 +80,74 @@ def generate_rule_based_report(res, hplc_suc, hplc_glu, hplc_fru, c_mol_suc):
     if abs(error) <= 5.0:
         cause_analysis = (
             f"역산된 실제 당농도({actual:.2f}%)가 스펙({nominal:.2f}%) 대비 "
-            f"오차 범위 내({error:+.2f}%)로 일정하게 유지되고 있습니다. 원료의 품질 변동성이 낮습니다."
+            f"오차 범위 내({error:+.2f}%)로 안정적입니다. {raw_material_type} 원료의 품질 변동성이 적습니다."
         )
     elif error > 5.0:
         cause_analysis = (
             f"역산된 실제 당농도({actual:.2f}%)가 스펙({nominal:.2f}%) 대비 "
-            f"{error:+.2f}% 높게 측정되었습니다. 원료의 농축도 증가 또는 칭량 과정에서의 오차 가능성을 검토하십시오."
+            f"{error:+.2f}% 높게 측정되었습니다. 원료의 농축/건조에 따른 당 함량 증가 또는 칭량 과정의 오차 가능성이 있습니다."
         )
     else:
         cause_analysis = (
             f"역산된 실제 당농도({actual:.2f}%)가 스펙({nominal:.2f}%) 대비 "
-            f"{error:+.2f}% 낮게 측정되었습니다. 정제당밀의 실효 당 함량 감소, 열열화 또는 수분 흡습 가능성이 있습니다."
+            f"{error:+.2f}% 낮게 측정되었습니다. {raw_material_type}의 실효 당 함량 감소, 수분 흡습 또는 보관 중 열열화 가능성이 있습니다."
         )
 
     # 2. Sucrose 가수분해 평가
-    # 초기 당밀 스펙 중 Sucrose 비율 기준 실측 잔여율 평가
     if hplc_suc == 0:
         hydrolysis_eval = (
             "HPLC 분석 결과 Sucrose가 전혀 검출되지 않았습니다(0%). "
-            "멸균 과정 또는 조제 조건에서 **Sucrose가 100% 완전 가수분해(Glc + Fru)**된 상태입니다."
+            "멸균 과정 또는 산/열 조건에 의해 **Sucrose가 100% 완전 가수분해(Glucose + Fructose)**된 상태입니다."
         )
     else:
         hydrolysis_eval = (
             f"Sucrose 실측값이 {hplc_suc:.2f}%로 일부 잔류하고 있습니다. "
-            "열처리 조건에 따라 일부만 가수분해되었으며 미생물 이용 속도에 영향을 줄 수 있습니다."
+            "열처리/멸균 조건에 따라 분해가 완결되지 않았으며, 미생물의 소화/이용 속도 차이에 영향을 줄 수 있습니다."
         )
 
-    # 3. 권고 사항
-    if abs(error) > 10.0:
-        recommendation = "⚠️ 당밀 당농도 오차율이 10%를 초과하므로 당밀 로트(LOT) 재검수 및 HPLC 재분석을 권장합니다."
+    # 3. 원료 특성별 리포트 (당밀 vs 정제당밀)
+    if raw_material_type == "일반 당밀":
+        molasses_info = (
+            "📌 **일반 당밀(Molasses) 특성 가이드**:\n"
+            "- 일반 당밀은 미네랄, 회분(Ash), 유기산 및 비당류 고형분이 포함되어 있어 멸균 시 메일라드(Maillard) 갈변 반응이 활발합니다.\n"
+            "- 당 수치 외에 미네랄 함량에 의한 멸균 후 pH 변화 및 발효 저해 요소 점검이 권장됩니다."
+        )
     else:
-        recommendation = "✅ 현 당농도 역산 수치를 기반으로 차기 배지 조제 칭량 스펙을 업데이트하여 반영하십시오."
+        molasses_info = (
+            "📌 **정제당밀(Refined Molasses) 특성 가이드**:\n"
+            "- 정제 공정을 거쳐 회분 및 탈색 처리가 완료된 원료로, 일반 당밀 대비 열열화 부반응 위험이 낮습니다.\n"
+            "- 당 조성(Suc/Glc/Fru)의 일관성이 비교적 높으므로 오차 발생 시 칭량 조건 및 수분 함량(Brix)을 우선 확인하십시오."
+        )
 
-    return cause_analysis, hydrolysis_eval, recommendation
+    # 4. 권고사항
+    if abs(error) > 10.0:
+        recommendation = f"⚠️ {raw_material_type} 당농도 오차율이 10%를 초과합니다. 원료 LOT 재검수 및 Brix/HPLC 재분석을 권장합니다."
+    else:
+        recommendation = "✅ 현 역산 수치를 바탕으로 차기 배지 조제 시 칭량 기준 스펙을 최적화하여 업데이트하십시오."
+
+    return cause_analysis, hydrolysis_eval, molasses_info, recommendation
 
 
 # --- UI LAYOUT ---
-st.title("🧪 정제당밀 당농도 역산 & 자동 분석 시스템")
+st.title("🧪 당밀류 원료 당농도 역산 & 자동 분석 시스템")
 st.markdown(
-    "배지 조제 조건과 HPLC 실측 결과를 바탕으로 **정제당밀의 실효 당농도**를 역산합니다."
+    "당밀 및 정제당밀의 배지 조제 조건과 HPLC 실측 결과를 바탕으로 **원료의 실효 당농도**를 역산합니다."
 )
 
-st.sidebar.header("📋 1. 배지 목표 초당 & 순도 설정")
+st.sidebar.header("📋 1. 원료 및 배지 목표 설정")
+raw_material_type = st.sidebar.selectbox(
+    "사용 원료 유형 선택", ["정제당밀", "일반 당밀"], index=0
+)
+
 target_glu = st.sidebar.number_input(
     "포도당 목표 당농도 (w/v%)", value=3.35, step=0.1
 )
 target_mol = st.sidebar.number_input(
-    "정제당밀 목표 당농도 (w/v%)", value=3.35, step=0.1
+    f"{raw_material_type} 목표 당농도 (w/v%)", value=3.35, step=0.1
 )
 p_glu = st.sidebar.number_input("포도당 원료 순도 (%)", value=91.0, step=0.1)
 
-st.sidebar.subheader("정제당밀 스펙 (%)")
+st.sidebar.subheader(f"{raw_material_type} 스펙 (%)")
 c_mol_suc = st.sidebar.number_input("Sucrose 스펙 (%)", value=5.8, step=0.1)
 c_mol_glu = st.sidebar.number_input("Glucose 스펙 (%)", value=8.3, step=0.1)
 c_mol_fru = st.sidebar.number_input("Fructose 스펙 (%)", value=9.7, step=0.1)
@@ -160,9 +179,12 @@ if calc_button or "res" in st.session_state:
     with col2:
         st.subheader("📊 3. 역산 결과 리포트")
         m1, m2 = st.columns(2)
-        m1.metric("당밀 스펙 당농도", f"{res['nominal_molasses_purity']:.2f}%")
+        m1.metric(
+            f"{raw_material_type} 스펙 당농도",
+            f"{res['nominal_molasses_purity']:.2f}%",
+        )
         m2.metric(
-            "역산된 당밀 실제 당농도",
+            f"역산된 {raw_material_type} 실제 당농도",
             f"{res['actual_molasses_purity']:.2f}%",
             delta=f"{res['error_rate']:.2f}% (스펙 대비)",
         )
@@ -171,10 +193,10 @@ if calc_button or "res" in st.session_state:
             {
                 "항목": [
                     "포도당 실제 칭량 투입량",
-                    "정제당밀 실제 칭량 투입량",
+                    f"{raw_material_type} 실제 칭량 투입량",
                     "포도당 유래 몰농도",
-                    "당밀 유래 실효 몰농도",
-                    "배지 내 당밀 당 질량",
+                    f"{raw_material_type} 유래 실효 몰농도",
+                    f"배지 내 {raw_material_type} 당 질량",
                     "HPLC 실측 총 당농도",
                 ],
                 "수치": [
@@ -190,12 +212,13 @@ if calc_button or "res" in st.session_state:
         st.dataframe(df_res, use_container_width=True, hide_index=True)
 
     st.markdown("---")
-    st.subheader("📋 4. 공정 해석 자동 리포트")
+    st.subheader("📋 4. 공정 및 원료 특성 리포트")
 
-    cause, hydro, reco = generate_rule_based_report(
-        res, hplc_suc, hplc_glu, hplc_fru, c_mol_suc
+    cause, hydro, mol_info, reco = generate_rule_based_report(
+        res, hplc_suc, hplc_glu, hplc_fru, c_mol_suc, raw_material_type
     )
 
     st.markdown(f"**1. 스펙 대비 역산 당농도 변동 분석**\n- {cause}")
     st.markdown(f"**2. Sucrose 가수분해 평가**\n- {hydro}")
-    st.markdown(f"**3. 배지 조제 및 품질 관리 권고사항**\n- {reco}")
+    st.markdown(f"**3. {raw_material_type} 품질 및 공정 특성**\n{mol_info}")
+    st.markdown(f"**4. 배지 조제 및 품질 관리 권고사항**\n- {reco}")
