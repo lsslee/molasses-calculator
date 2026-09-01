@@ -142,8 +142,10 @@ with col_input:
 
     p_glu = 91.0
     p_liq = 75.0
-    c_ref_suc, c_ref_glu, c_ref_fru = 6.12, 6.04, 6.36
-    c_mol_suc, c_mol_glu, c_mol_fru = 24.8, 7.0, 8.2
+
+    # 기본 평균 농도 (필요 시 보정값을 곱한 수치로 직접 수정 가능)
+    DEFAULT_REF_SUC, DEFAULT_REF_GLU, DEFAULT_REF_FRU = 6.12, 6.04, 6.36
+    DEFAULT_MOL_SUC, DEFAULT_MOL_GLU, DEFAULT_MOL_FRU = 24.80, 7.00, 8.20
 
     use_auto_ref_spec = False
     use_auto_mol_spec = False
@@ -163,14 +165,16 @@ with col_input:
             "정제당 세부 스펙을 모름",
             value=False,
             key="check_auto_ref",
-            help="K-PARK2 정제당의 평균 스펙으로 계산",
+            help="정제당의 대표 평균 스펙으로 자동 설정됩니다.",
         )
 
         col_ref1, col_ref2, col_ref3 = st.columns(3)
         with col_ref1:
             c_ref_suc = st.number_input(
                 "Sucrose (%)",
-                value=6.12,
+                value=(
+                    DEFAULT_REF_SUC if use_auto_ref_spec else 6.12
+                ),  # 체크 시 대표 평균값 입력
                 step=0.01,
                 key="ref_suc",
                 disabled=use_auto_ref_spec,
@@ -178,7 +182,9 @@ with col_input:
         with col_ref2:
             c_ref_glu = st.number_input(
                 "Glucose (%)",
-                value=6.04,
+                value=(
+                    DEFAULT_REF_GLU if use_auto_ref_spec else 6.04
+                ),  # 체크 시 대표 평균값 입력
                 step=0.01,
                 key="ref_glu",
                 disabled=use_auto_ref_spec,
@@ -186,7 +192,9 @@ with col_input:
         with col_ref3:
             c_ref_fru = st.number_input(
                 "Fructose (%)",
-                value=6.36,
+                value=(
+                    DEFAULT_REF_FRU if use_auto_ref_spec else 6.36
+                ),  # 체크 시 대표 평균값 입력
                 step=0.01,
                 key="ref_fru",
                 disabled=use_auto_ref_spec,
@@ -207,14 +215,16 @@ with col_input:
             "당밀 세부 스펙을 모름",
             value=False,
             key="check_auto_mol",
-            help="K-PARK2 정제당의 평균 스펙으로 계산",
+            help="당밀의 대표 평균 스펙으로 자동 설정됩니다.",
         )
 
         col_mol1, col_mol2, col_mol3 = st.columns(3)
         with col_mol1:
             c_mol_suc = st.number_input(
                 "Sucrose (%)",
-                value=24.80,
+                value=(
+                    DEFAULT_MOL_SUC if use_auto_mol_spec else 24.80
+                ),  # 체크 시 대표 평균값 입력
                 step=0.01,
                 key="mol_suc",
                 disabled=use_auto_mol_spec,
@@ -222,7 +232,9 @@ with col_input:
         with col_mol2:
             c_mol_glu = st.number_input(
                 "Glucose (%)",
-                value=7.00,
+                value=(
+                    DEFAULT_MOL_GLU if use_auto_mol_spec else 7.00
+                ),  # 체크 시 대표 평균값 입력
                 step=0.01,
                 key="mol_glu",
                 disabled=use_auto_mol_spec,
@@ -230,7 +242,9 @@ with col_input:
         with col_mol3:
             c_mol_fru = st.number_input(
                 "Fructose (%)",
-                value=8.20,
+                value=(
+                    DEFAULT_MOL_FRU if use_auto_mol_spec else 8.20
+                ),  # 체크 시 대표 평균값 입력
                 step=0.01,
                 key="mol_fru",
                 disabled=use_auto_mol_spec,
