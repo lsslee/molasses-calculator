@@ -79,7 +79,7 @@ col_input, col_report = st.columns([1.1, 0.9])
 
 with col_input:
     # ---------------------------------------------------------
-    # Section 1. 당원 종류 선택 (기존 2번 -> 1번으로 변경)
+    # Section 1. 당원 종류 선택
     # ---------------------------------------------------------
     st.markdown(
         '<div class="section-header">1. 당원 종류 선택</div>',
@@ -92,10 +92,10 @@ with col_input:
     )
 
     # ---------------------------------------------------------
-    # Section 2. 당원별 목표 당농도 입력 및 합산 총당/비율 자동 계산 (기존 3번 -> 2번으로 변경)
+    # Section 2. 당원별 당농도 입력 및 합산 총당/비율 자동 계산
     # ---------------------------------------------------------
     st.markdown(
-        '<div class="section-header">2. 당원별 목표 당농도 입력</div>',
+        '<div class="section-header">2. 당원별 당농도 입력</div>',
         unsafe_allow_html=True,
     )
 
@@ -103,13 +103,13 @@ with col_input:
     sum_target_sugar = 0.0
 
     if selected_sources:
-        st.caption("각 당원이 담당할 목표 당농도(w/v%)를 입력하세요.")
+        st.caption("각 당원의 농도를 입력해주세요.")
         ratio_cols = st.columns(len(selected_sources))
 
         for idx, src in enumerate(selected_sources):
             with ratio_cols[idx]:
                 target_sugar_dict[src] = st.number_input(
-                    f"{src} 목표 농도 (%)",
+                    f"{src} 농도 (%)",
                     value=3.5 if idx == 0 else 3.5,
                     step=0.1,
                     min_value=0.0,
@@ -133,7 +133,7 @@ with col_input:
         st.warning("⚠️ 당원 종류를 1개 이상 선택해 주세요.")
 
     # ---------------------------------------------------------
-    # Section 3. 당원 스펙 입력 (기존 4번 -> 3번으로 변경)
+    # Section 3. 당원 스펙 입력
     # ---------------------------------------------------------
     st.markdown(
         '<div class="section-header">3. 당원 스펙 입력</div>',
@@ -170,11 +170,7 @@ with col_input:
             )
 
         ref_spec_sum = c_ref_suc + c_ref_glu + c_ref_fru
-        st.number_input(
-            "🔒 정제당 순도 (%)",
-            value=float(ref_spec_sum),
-            disabled=True,
-        )
+        st.success(f"🏷️ **정제당 총 스펙 순도**: **{ref_spec_sum:.2f} %**")
 
     if "당밀" in selected_sources:
         st.subheader("📌 당밀 스펙")
@@ -193,14 +189,10 @@ with col_input:
             )
 
         mol_spec_sum = c_mol_suc + c_mol_glu + c_mol_fru
-        st.number_input(
-            "🔒 당밀 순도 (%)",
-            value=float(mol_spec_sum),
-            disabled=True,
-        )
+        st.success(f"🏷️ **당밀 총 스펙 순도**: **{mol_spec_sum:.2f} %**")
 
     # ---------------------------------------------------------
-    # Section 4. 배양액 0h 샘플 HPLC 측정 결과 입력 (기존 5번 -> 4번으로 변경)
+    # Section 4. 배양액 0h 샘플 HPLC 측정 결과 입력
     # ---------------------------------------------------------
     st.markdown(
         '<div class="section-header">4. 배양액 0h 샘플 HPLC 측정 결과 입력</div>',
