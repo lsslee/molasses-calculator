@@ -237,29 +237,14 @@ with col_input:
     if "액당" in selected_sources:
         st.subheader("📌 액당 스펙")
         p_liq = st.number_input(
-            "액당 당순도 (%)  ※ 제품 중량 대비 '당류(Glucose+Fructose)' 함량입니다. "
-            "'고형분(Brix)'과는 다른 개념이니 COA의 당 순도 항목을 입력해 주세요.",
+            "액당 당순도 (%)",
             value=75.0,
             step=0.1,
             min_value=0.0,
             max_value=100.0,
             key="p_liq",
         )
-        p_liq_glu_ratio = st.number_input(
-            "액당 내 Glucose 비중 (%)  ※ 나머지는 Fructose로 가정 (일반 액상과당 기준 기본값 50%)",
-            value=50.0,
-            step=1.0,
-            min_value=0.0,
-            max_value=100.0,
-            key="p_liq_glu_ratio",
-            help="액당(액상과당/전화당 등)은 보통 Glucose와 Fructose가 섞여 있습니다. "
-            "제품 스펙을 알면 정확한 비율을, 모르면 기본값(50:50)을 사용하세요.",
-        )
-        st.caption(
-            f"➡️ 환산 비율: Glucose {p_liq_glu_ratio:.0f}% : Fructose {100-p_liq_glu_ratio:.0f}%"
-        )
-    else:
-        p_liq_glu_ratio = 50.0
+    p_liq_glu_ratio = 100.0
 
     if "정제당" in selected_sources:
         st.subheader("📌 정제당 스펙")
@@ -416,8 +401,6 @@ if (calc_button or "res" in st.session_state) and not sources_conflict and selec
     m_glu_powder = (
         (g_l_glu * (p_glu / 100.0)) / MW_GLU if "포도당" in selected_sources else 0
     )
-    # [FIX] 액당은 Glucose 단일 성분이 아니라 Glucose+Fructose 혼합물일 수 있으므로,
-    # 사용자가 입력한 조성비(p_liq_glu_ratio)로 나누어 각각 올바른 MW로 환산합니다.
     liq_sugar_mass = g_l_liq * (p_liq / 100.0)  # 액당이 기여하는 순수 당 질량(g/L)
     m_liq_glu = (
         (liq_sugar_mass * (p_liq_glu_ratio / 100.0)) / MW_GLU
@@ -787,10 +770,7 @@ if (calc_button or "res" in st.session_state) and not sources_conflict and selec
                 step2_list.append(["포도당 유래 몰수 차감액", f"- {res['m_glu_powder']:.4f} mol/L"])
             if "액당" in selected_sources:
                 step2_list.append(
-                    ["액당 유래 몰수 차감액 (Glucose)", f"- {res['m_liq_glu']:.4f} mol/L"]
-                )
-                step2_list.append(
-                    ["액당 유래 몰수 차감액 (Fructose)", f"- {res['m_liq_fru']:.4f} mol/L"]
+                    ["액당 유래 몰수 차감액", f"- {res['m_liq_glu']:.4f} mol/L"]
                 )
             step2_list.append([f"{complex_source_name} 유래 순수 몰수 (0 미만은 0으로 처리)", f"**{res['m_remaining']:.4f} mol/L**"])
 
