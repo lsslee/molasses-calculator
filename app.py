@@ -357,7 +357,13 @@ with col_input:
         )
 
     # [FIX] 당원 미선택 또는 정제당+당밀 동시선택 시 계산 버튼 비활성화
-    calc_disabled = (len(selected_sources) == 0) or sources_conflict
+    # [FIX] 당원 미선택, 정제당+당밀 동시선택, 또는 목표 농도 합이 0인
+    # 상태(=계산해봤자 전부 0%만 나오는 무의미한 상태)에서도 버튼 비활성화
+    calc_disabled = (
+        (len(selected_sources) == 0)
+        or sources_conflict
+        or (sum_target_sugar <= 0)
+    )
     btn_col1, btn_col2 = st.columns([3, 1])
     with btn_col1:
         calc_button = st.button(
@@ -643,7 +649,54 @@ if (calc_button or "res" in st.session_state) and not sources_conflict and selec
                 "동일한 보정식이 정확하게 성립합니다."
             )
 
-        st.markdown("#### 2️⃣ 당원 품질 및 순도 변동 평가")
+        st.markdown("#### 2️⃣ Glucose : Fructose 비율 이상 진단")
+        if complex_source_name != "복합당원":
+            # 자당 1몰이 가수분해되면 Glucose 1몰 + Fructose 1몰(등몰)이 생성됩니다.
+            # MW_GLU == MW_FRU(180.16)이므로, 스펙상 "이론적으로 나와야 할" 질량비는
+            # (원료 자체 Glucose스펙 + 자당유래분) : (원료 자체 Fructose스펙 + 자당유래분)
+            # 로 계산할 수 있고, 자당유래분은 Glucose·Fructose에 동일하게 배분됩니다.
+            complex_native_glu = c_ref_glu if complex_source_name == "정제당" else c_mol_glu
+            complex_native_fru = c_ref_fru if complex_source_name == "정제당" else c_mol_fru
+            suc_derived_share = complex_suc_spec * (MW_GLU / MW_SUC)
+            expected_glu_mass = complex_native_glu + suc_derived_share
+            expected_fru_mass = complex_native_fru + suc_derived_share
+            expected_gf_ratio = (
+                expected_glu_mass / expected_fru_mass if expected_fru_mass > 0 else None
+            )
+
+            # 실측값에서 단일 당원(포도당/액당) 기여분을 제외해 복합당원 유래분만 분리
+            # (MW_GLU == MW_FRU이므로 몰수 비율 = 질량 비율)
+            complex_glu_meas = max(0.0, m_glu_meas - m_glu_powder - m_liq_glu)
+            complex_fru_meas = max(0.0, m_fru_meas - m_liq_fru)
+            measured_gf_ratio = (
+                complex_glu_meas / complex_fru_meas if complex_fru_meas > 0 else None
+            )
+
+            if expected_gf_ratio is not None and measured_gf_ratio is not None:
+                gf_ratio_diff_pct = (measured_gf_ratio / expected_gf_ratio - 1) * 100
+                st.markdown(
+                    f"- **이론 G:F 비율**(스펙 기준): `{expected_gf_ratio:.2f}` "
+                    f"➡️ **실측 G:F 비율**(복합당원 유래분): `{measured_gf_ratio:.2f}` "
+                    f"(`{gf_ratio_diff_pct:+.1f}%` 편차)"
+                )
+                if abs(gf_ratio_diff_pct) <= 10.0:
+                    st.caption("🟢 **분석**: Glucose·Fructose가 이론치와 유사한 비율로 검출되어 특정 당의 선택적 열화는 없어 보입니다.")
+                elif gf_ratio_diff_pct > 10.0:
+                    st.caption(
+                        "🟡 **분석**: 실측 비율이 이론치보다 Glucose 쪽으로 치우쳐 있습니다 — "
+                        "Fructose가 케톤당 특성상 열/Maillard 반응에 더 취약해 상대적으로 더 많이 "
+                        "소모(갈변·캐러멜화)됐을 가능성이 있습니다. 멸균 온도·시간을 점검하세요."
+                    )
+                else:
+                    st.caption(
+                        "🟡 **분석**: 실측 비율이 이론치보다 Fructose 쪽으로 치우쳐 있습니다 — "
+                        "Glucose가 상대적으로 더 소모됐을 가능성(예: 미생물 오염에 의한 선택적 소비, "
+                        "HPLC 정량/검량선 이슈)이 있으니 확인이 필요합니다."
+                    )
+            else:
+                st.caption("ℹ️ Fructose 스펙 또는 실측값이 0이라 G:F 비율을 계산할 수 없습니다.")
+
+        st.markdown("#### 3️⃣ 당원 품질 및 순도 변동 평가")
         if complex_source_name != "복합당원":
             st.markdown(
                 f"- **스펙 순도**: `{nominal_complex_purity:.2f}%` ➡️ **실제 역산 순도**: `{actual_complex_purity:.2f}%` (`{abs_diff:+.2f}%p` 변동)"
@@ -659,7 +712,7 @@ if (calc_button or "res" in st.session_state) and not sources_conflict and selec
                     f"🔴 **분석**: 스펙 대비 당 함량이 **{abs(abs_diff):.2f}%p 낮게 역산**되었습니다. 원료 흡습, 보관 중 열화 또는 고형분 침전 현상을 확인하세요."
                 )
 
-        st.markdown("#### 3️⃣ 공정 및 칭량 오차 검증")
+        st.markdown("#### 4️⃣ 공정 및 칭량 오차 검증")
         diff_total = total_measured_sugar - sum_target_sugar
         st.markdown(
             f"- **목표 설정 총당**: `{sum_target_sugar:.2f}%` ➡️ **HPLC 실측 총당**: `{total_measured_sugar:.2f}%` (`{diff_total:+.2f}%p` 차이)"
