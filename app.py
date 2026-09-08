@@ -45,8 +45,8 @@ HYDROLYSIS_MASS_RATIO = (2 * MW_GLU) / MW_SUC  # ≈ 1.0526
 
 # 대표 평균 농도 상수
 # (2026.09 기준 연구소 COA 실측 데이터 평균과 일치 확인됨 — 아래 참고)
-DEFAULT_REF_SUC, DEFAULT_REF_GLU, DEFAULT_REF_FRU = 6.12, 6.04, 6.36
-DEFAULT_MOL_SUC, DEFAULT_MOL_GLU, DEFAULT_MOL_FRU = 24.80, 7.00, 8.20
+DEFAULT_REF_SUC, DEFAULT_REF_GLU, DEFAULT_REF_FRU = 6.1, 6.0, 6.4
+DEFAULT_MOL_SUC, DEFAULT_MOL_GLU, DEFAULT_MOL_FRU = 24.8, 7.0, 8.2
 
 # 연구소 입고 원부재료 분석 결과 (COA) — 보정식 자체 검증용 참고 데이터.
 # 실제 계산에는 쓰이지 않고, 하단 "검증 근거" expander에서 보정식이
@@ -188,12 +188,13 @@ with col_input:
 
         for idx, src in enumerate(selected_sources):
             with ratio_cols[idx]:
-                # [FIX] 조건부 삼항식이 항상 같은 값을 반환하던 잔재 정리
+                # [FIX] 저울 정밀도(소수점 2자리)에 맞춰 목표 농도는 0.01 단위로 입력
                 target_sugar_dict[src] = st.number_input(
                     f"{src} 농도 (%)",
-                    value=3.5,
-                    step=0.1,
+                    value=3.50,
+                    step=0.01,
                     min_value=0.0,
+                    format="%.2f",
                     key=f"target_sugar_{src}",
                 )
 
@@ -231,6 +232,7 @@ with col_input:
             step=0.1,
             min_value=0.0,
             max_value=100.0,
+            format="%.1f",
             key="p_glu",
         )
 
@@ -242,6 +244,7 @@ with col_input:
             step=0.1,
             min_value=0.0,
             max_value=100.0,
+            format="%.1f",
             key="p_liq",
         )
     p_liq_glu_ratio = 100.0
@@ -259,18 +262,18 @@ with col_input:
         col_ref1, col_ref2, col_ref3 = st.columns(3)
         with col_ref1:
             c_ref_suc = st.number_input(
-                "Sucrose (%)", value=DEFAULT_REF_SUC, step=0.01,
-                min_value=0.0, key="ref_suc", disabled=use_auto_ref_spec,
+                "Sucrose (%)", value=DEFAULT_REF_SUC, step=0.1,
+                min_value=0.0, format="%.1f", key="ref_suc", disabled=use_auto_ref_spec,
             )
         with col_ref2:
             c_ref_glu = st.number_input(
-                "Glucose (%)", value=DEFAULT_REF_GLU, step=0.01,
-                min_value=0.0, key="ref_glu", disabled=use_auto_ref_spec,
+                "Glucose (%)", value=DEFAULT_REF_GLU, step=0.1,
+                min_value=0.0, format="%.1f", key="ref_glu", disabled=use_auto_ref_spec,
             )
         with col_ref3:
             c_ref_fru = st.number_input(
-                "Fructose (%)", value=DEFAULT_REF_FRU, step=0.01,
-                min_value=0.0, key="ref_fru", disabled=use_auto_ref_spec,
+                "Fructose (%)", value=DEFAULT_REF_FRU, step=0.1,
+                min_value=0.0, format="%.1f", key="ref_fru", disabled=use_auto_ref_spec,
             )
 
         if use_auto_ref_spec:
@@ -279,7 +282,7 @@ with col_input:
             )
 
         ref_spec_sum = c_ref_suc + c_ref_glu + c_ref_fru
-        st.success(f"🏷️ **정제당 총 스펙 순도**: **{ref_spec_sum:.2f} %**")
+        st.success(f"🏷️ **정제당 총 스펙 순도**: **{ref_spec_sum:.1f} %**")
     else:
         c_ref_suc, c_ref_glu, c_ref_fru = 0.0, 0.0, 0.0
 
@@ -296,18 +299,18 @@ with col_input:
         col_mol1, col_mol2, col_mol3 = st.columns(3)
         with col_mol1:
             c_mol_suc = st.number_input(
-                "Sucrose (%)", value=DEFAULT_MOL_SUC, step=0.01,
-                min_value=0.0, key="mol_suc", disabled=use_auto_mol_spec,
+                "Sucrose (%)", value=DEFAULT_MOL_SUC, step=0.1,
+                min_value=0.0, format="%.1f", key="mol_suc", disabled=use_auto_mol_spec,
             )
         with col_mol2:
             c_mol_glu = st.number_input(
-                "Glucose (%)", value=DEFAULT_MOL_GLU, step=0.01,
-                min_value=0.0, key="mol_glu", disabled=use_auto_mol_spec,
+                "Glucose (%)", value=DEFAULT_MOL_GLU, step=0.1,
+                min_value=0.0, format="%.1f", key="mol_glu", disabled=use_auto_mol_spec,
             )
         with col_mol3:
             c_mol_fru = st.number_input(
-                "Fructose (%)", value=DEFAULT_MOL_FRU, step=0.01,
-                min_value=0.0, key="mol_fru", disabled=use_auto_mol_spec,
+                "Fructose (%)", value=DEFAULT_MOL_FRU, step=0.1,
+                min_value=0.0, format="%.1f", key="mol_fru", disabled=use_auto_mol_spec,
             )
 
         if use_auto_mol_spec:
@@ -316,7 +319,7 @@ with col_input:
             )
 
         mol_spec_sum = c_mol_suc + c_mol_glu + c_mol_fru
-        st.success(f"🏷️ **당밀 총 스펙 순도**: **{mol_spec_sum:.2f} %**")
+        st.success(f"🏷️ **당밀 총 스펙 순도**: **{mol_spec_sum:.1f} %**")
     else:
         c_mol_suc, c_mol_glu, c_mol_fru = 0.0, 0.0, 0.0
 
@@ -330,15 +333,15 @@ with col_input:
     col_h1, col_h2, col_h3 = st.columns(3)
     with col_h1:
         hplc_suc = st.number_input(
-            "Sucrose (w/v%)", value=1.00, step=0.1, min_value=0.0, key="hplc_suc"
+            "Sucrose (w/v%)", value=1.0, step=0.1, min_value=0.0, format="%.1f", key="hplc_suc"
         )
     with col_h2:
         hplc_glu = st.number_input(
-            "Glucose (w/v%)", value=4.76, step=0.1, min_value=0.0, key="hplc_glu"
+            "Glucose (w/v%)", value=4.8, step=0.1, min_value=0.0, format="%.1f", key="hplc_glu"
         )
     with col_h3:
         hplc_fru = st.number_input(
-            "Fructose (w/v%)", value=1.76, step=0.1, min_value=0.0, key="hplc_fru"
+            "Fructose (w/v%)", value=1.8, step=0.1, min_value=0.0, format="%.1f", key="hplc_fru"
         )
 
     # [FIX] 당원 미선택 또는 정제당+당밀 동시선택 시 계산 버튼 비활성화
@@ -528,7 +531,7 @@ if (calc_button or "res" in st.session_state) and not sources_conflict and selec
             with m1:
                 st.metric(
                     f"{complex_source_name} 스펙 순도",
-                    f"{nominal_complex_purity:.2f}%",
+                    f"{nominal_complex_purity:.1f}%",
                 )
             with m2:
                 delta_class = "highlight-delta-pos" if abs_diff >= 0 else "highlight-delta-neg"
@@ -536,19 +539,19 @@ if (calc_button or "res" in st.session_state) and not sources_conflict and selec
                     f"""
                     <div class="highlight-card">
                         <div class="highlight-title">🎯 역산된 {complex_source_name} 실제 당농도</div>
-                        <div class="highlight-value">{actual_complex_purity:.2f}%</div>
-                        <div class="{delta_class}">스펙 대비 차이: {abs_diff:+.2f}%p</div>
+                        <div class="highlight-value">{actual_complex_purity:.1f}%</div>
+                        <div class="{delta_class}">스펙 대비 차이: {abs_diff:+.1f}%p</div>
                     </div>
                 """,
                     unsafe_allow_html=True,
                 )
             st.caption(
                 f"ℹ️ 가수분해 질량 보정계수: ×{1/hydrolysis_correction:.4f} "
-                f"(자당 스펙 비중 {complex_suc_spec:.2f}% 기준 — 실제 가수분해 진행률과 무관하게 적용됨)"
+                f"(자당 스펙 비중 {complex_suc_spec:.1f}% 기준 — 실제 가수분해 진행률과 무관하게 적용됨)"
             )
         else:
             st.metric(
-                "HPLC 실측 총 당농도", f"{res['measured_total_sugar_percent']:.2f}%"
+                "HPLC 실측 총 당농도", f"{res['measured_total_sugar_percent']:.1f}%"
             )
 
         st.write("")
@@ -562,26 +565,26 @@ if (calc_button or "res" in st.session_state) and not sources_conflict and selec
         table_data = []
         if "포도당" in selected_sources:
             table_data.append(
-                ["포도당", f"{actual_glu_pct:.4f} %",
-                 f"{real_sugar_contributions.get('포도당', 0):.2f} %",
+                ["포도당", f"{actual_glu_pct:.2f} %",
+                 f"{real_sugar_contributions.get('포도당', 0):.1f} %",
                  f"{real_sugar_shares.get('포도당', 0):.1f} %"]
             )
         if "액당" in selected_sources:
             table_data.append(
-                ["액당", f"{actual_liq_pct:.4f} %",
-                 f"{real_sugar_contributions.get('액당', 0):.2f} %",
+                ["액당", f"{actual_liq_pct:.2f} %",
+                 f"{real_sugar_contributions.get('액당', 0):.1f} %",
                  f"{real_sugar_shares.get('액당', 0):.1f} %"]
             )
         if "정제당" in selected_sources:
             table_data.append(
-                ["정제당", f"{actual_ref_pct:.4f} %",
-                 f"{real_sugar_contributions.get('정제당', 0):.2f} %",
+                ["정제당", f"{actual_ref_pct:.2f} %",
+                 f"{real_sugar_contributions.get('정제당', 0):.1f} %",
                  f"{real_sugar_shares.get('정제당', 0):.1f} %"]
             )
         if "당밀" in selected_sources:
             table_data.append(
-                ["당밀", f"{actual_mol_pct:.4f} %",
-                 f"{real_sugar_contributions.get('당밀', 0):.2f} %",
+                ["당밀", f"{actual_mol_pct:.2f} %",
+                 f"{real_sugar_contributions.get('당밀', 0):.1f} %",
                  f"{real_sugar_shares.get('당밀', 0):.1f} %"]
             )
 
@@ -614,7 +617,7 @@ if (calc_button or "res" in st.session_state) and not sources_conflict and selec
 
         st.markdown("#### 1️⃣ Sucrose 열가수분해 및 열화 분석")
         st.markdown(
-            f"- **추정 가수분해율**: **{hydro_rate:.1f}%** (이론 투입 추정치 {expected_suc:.2f}% 대비 실측 잔류량 {hplc_suc:.2f}%)"
+            f"- **추정 가수분해율**: **{hydro_rate:.1f}%** (이론 투입 추정치 {expected_suc:.1f}% 대비 실측 잔류량 {hplc_suc:.1f}%)"
         )
         if hydro_rate >= 95.0:
             st.caption("🟢 **분석**: 멸균 공정 중 Sucrose가 대부분 Glucose와 Fructose로 완전히 전환되었습니다.")
@@ -682,23 +685,23 @@ if (calc_button or "res" in st.session_state) and not sources_conflict and selec
         st.markdown("#### 3️⃣ 당원 품질 및 순도 변동 평가")
         if complex_source_name != "복합당원":
             st.markdown(
-                f"- **스펙 순도**: `{nominal_complex_purity:.2f}%` ➡️ **실제 역산 순도**: `{actual_complex_purity:.2f}%` (`{abs_diff:+.2f}%p` 변동)"
+                f"- **스펙 순도**: `{nominal_complex_purity:.1f}%` ➡️ **실제 역산 순도**: `{actual_complex_purity:.1f}%` (`{abs_diff:+.1f}%p` 변동)"
             )
             if abs(abs_diff) <= 2.0:
                 st.caption("🟢 **분석**: 원료 스펙 오차 범위(±2%p) 내로 품질이 매우 안정적입니다.")
             elif abs_diff > 2.0:
                 st.caption(
-                    f"🔴 **분석**: 스펙 대비 당 함량이 **{abs_diff:.2f}%p 높게 역산**되었습니다. 원료 저장 중 수분 증발(농축) 또는 제조사 품질 편차가 의심됩니다."
+                    f"🔴 **분석**: 스펙 대비 당 함량이 **{abs_diff:.1f}%p 높게 역산**되었습니다. 원료 저장 중 수분 증발(농축) 또는 제조사 품질 편차가 의심됩니다."
                 )
             else:
                 st.caption(
-                    f"🔴 **분석**: 스펙 대비 당 함량이 **{abs(abs_diff):.2f}%p 낮게 역산**되었습니다. 원료 흡습, 보관 중 열화 또는 고형분 침전 현상을 확인하세요."
+                    f"🔴 **분석**: 스펙 대비 당 함량이 **{abs(abs_diff):.1f}%p 낮게 역산**되었습니다. 원료 흡습, 보관 중 열화 또는 고형분 침전 현상을 확인하세요."
                 )
 
         st.markdown("#### 4️⃣ 공정 및 칭량 오차 검증")
         diff_total = total_measured_sugar - sum_target_sugar
         st.markdown(
-            f"- **목표 설정 총당**: `{sum_target_sugar:.2f}%` ➡️ **HPLC 실측 총당**: `{total_measured_sugar:.2f}%` (`{diff_total:+.2f}%p` 차이)"
+            f"- **목표 설정 총당**: `{sum_target_sugar:.2f}%` ➡️ **HPLC 실측 총당**: `{total_measured_sugar:.1f}%` (`{diff_total:+.1f}%p` 차이)"
         )
         if abs(diff_total) > 0.5:
             st.caption(
