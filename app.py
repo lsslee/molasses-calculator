@@ -728,7 +728,7 @@ if (calc_button or "res" in st.session_state) and not sources_conflict and selec
         with s1_col1:
             st.caption("📌 **원료별 실제 칭량 투입량 (g/L)**")
             st.caption(
-                "포도당·액당은 [Step 2]의 몰수 차감에, 정제당·당밀은 [Step 3~4]의 "
+                "포도당·액당은 [Step 2]의 몰수 차감에, 정제당·당밀은 [Step 3~5]의 "
                 "역산 순도 계산(분모)에 그대로 쓰입니다."
             )
             input_list = []
@@ -809,8 +809,27 @@ if (calc_button or "res" in st.session_state) and not sources_conflict and selec
 
         st.markdown(
             f"""<div class="step-card">
-            <div class="step-title">[Step 4] 가수분해 질량 보정 및 최종 순도 산출 (%)</div>
-            자당이 가수분해되며 흡수한 물 분자 질량만큼 헥소스 등가 질량이 부풀어 보이므로,
+            <div class="step-title">[Step 4] 보정 전 예상 순도(raw) 산출</div>
+            Step 3의 헥소스 등가 질량을, 실제로 칭량 투입한 {complex_source_name} 중량(g/L, [Step 1] 참고)으로
+            나누면 "아직 물 흡수 오차가 반영된" 예상 순도가 나옵니다.
+        </div>""",
+            unsafe_allow_html=True,
+        )
+        st.latex(
+            r"\text{보정 전 예상 순도(\%)} = \frac{\text{" + complex_source_name + r" 유래 헥소스 등가 질량 (g/L)}}"
+            r"{\text{" + complex_source_name + r" 칭량 투입량 (g/L)}} \times 100"
+        )
+        st.info(
+            f"💡 **보정 전 예상 순도**: `{complex_g_l:.2f} g/L ÷ {g_l_complex:.2f} g/L × 100 "
+            f"= {res['raw_actual_purity']:.1f}%` — 아직 자당 물 흡수 오차가 포함되어 스펙({nominal_complex_purity:.1f}%)보다 높게 나옵니다."
+        )
+
+        st.markdown("---")
+
+        st.markdown(
+            f"""<div class="step-card">
+            <div class="step-title">[Step 5] 가수분해 질량 보정 및 최종 순도 산출 (%)</div>
+            자당이 가수분해되며 흡수한 물 분자 질량만큼 Step 4의 예상 순도가 부풀어 있으므로,
             해당 원료의 자당 스펙 비중에 비례해 보정한 뒤 최종 순도(%)와 스펙 대비 차이(%p)를 계산합니다.
         </div>""",
             unsafe_allow_html=True,
@@ -819,14 +838,17 @@ if (calc_button or "res" in st.session_state) and not sources_conflict and selec
             r"\text{보정계수} = 1 + \frac{\text{Sucrose 스펙}}{\text{총 스펙 순도}} \times "
             r"\left(\frac{2 \times 180.16}{342.30} - 1\right)"
         )
+        st.latex(
+            r"\text{최종 순도(\%)} = \frac{\text{보정 전 예상 순도}}{\text{보정계수}}"
+        )
         s4_col1, s4_col2, s4_col3 = st.columns(3)
         with s4_col1:
-            st.metric("보정 전 순도(raw)", f"{res['raw_actual_purity']:.2f}%")
+            st.metric("보정 전 순도(raw)", f"{res['raw_actual_purity']:.1f}%")
         with s4_col2:
             st.metric(f"보정계수", f"×{res['hydrolysis_correction']:.4f}")
         with s4_col3:
-            st.metric(f"역산된 {complex_source_name} 최종 순도", f"{res['actual_complex_purity']:.2f}%")
-        st.metric("스펙 대비 차이", f"{abs_diff:+.2f}%p")
+            st.metric(f"역산된 {complex_source_name} 최종 순도", f"{res['actual_complex_purity']:.1f}%")
+        st.metric("스펙 대비 차이", f"{abs_diff:+.1f}%p")
 
 
 # ---------------------------------------------------------
