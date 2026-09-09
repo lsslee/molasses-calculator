@@ -727,29 +727,38 @@ if (calc_button or "res" in st.session_state) and not sources_conflict and selec
         s1_col1, s1_col2 = st.columns(2)
         with s1_col1:
             st.caption("📌 **원료별 실제 칭량 투입량 (g/L)**")
+            st.caption(
+                "포도당·액당은 [Step 2]의 몰수 차감에, 정제당·당밀은 [Step 3~4]의 "
+                "역산 순도 계산(분모)에 그대로 쓰입니다."
+            )
             input_list = []
             if "포도당" in selected_sources:
-                input_list.append(["포도당", f"{res['actual_glu_pct']:.4f} %", f"{res['g_l_glu']:.2f} g/L"])
+                input_list.append(["포도당", f"{res['actual_glu_pct']:.2f} %", f"{res['g_l_glu']:.2f} g/L"])
             if "액당" in selected_sources:
-                input_list.append(["액당", f"{res['actual_liq_pct']:.4f} %", f"{res['g_l_liq']:.2f} g/L"])
+                input_list.append(["액당", f"{res['actual_liq_pct']:.2f} %", f"{res['g_l_liq']:.2f} g/L"])
             if "정제당" in selected_sources:
-                input_list.append(["정제당", f"{res['actual_ref_pct']:.4f} %", f"{res['g_l_ref']:.2f} g/L"])
+                input_list.append(["정제당", f"{res['actual_ref_pct']:.2f} %", f"{res['g_l_ref']:.2f} g/L"])
             if "당밀" in selected_sources:
-                input_list.append(["당밀", f"{res['actual_mol_pct']:.4f} %", f"{res['g_l_mol']:.2f} g/L"])
+                input_list.append(["당밀", f"{res['actual_mol_pct']:.2f} %", f"{res['g_l_mol']:.2f} g/L"])
 
             df_step1_input = pd.DataFrame(input_list, columns=["당원", "칭량 비율(w/v%)", "칭량 농도(g/L)"])
             st.dataframe(df_step1_input, use_container_width=True, hide_index=True)
 
         with s1_col2:
             st.caption("📌 **HPLC 실측 당의 C6 등가 몰농도 (mol/L)**")
+            st.caption(
+                "Sucrose 1분자 = C6 단위 2개(Glucose+Fructose로 쪼개짐)이므로, "
+                "합산 시 Sucrose 몰농도는 ×2로 반영됩니다. '합산 기여값' 열을 그대로 "
+                "더하면 아래 총합과 일치합니다."
+            )
             df_step1_hplc = pd.DataFrame(
                 [
-                    ["Sucrose", f"{hplc_suc:.2f} %", f"{res['m_suc_meas']:.4f} mol/L"],
-                    ["Glucose", f"{hplc_glu:.2f} %", f"{res['m_glu_meas']:.4f} mol/L"],
-                    ["Fructose", f"{hplc_fru:.2f} %", f"{res['m_fru_meas']:.4f} mol/L"],
-                    ["총 C6 등가 몰수합", "-", f"**{res['m_total_meas']:.4f} mol/L**"],
+                    ["Sucrose", f"{hplc_suc:.1f} %", f"{res['m_suc_meas']:.4f} mol/L", f"{res['m_suc_meas']*2:.4f} mol/L (×2)"],
+                    ["Glucose", f"{hplc_glu:.1f} %", f"{res['m_glu_meas']:.4f} mol/L", f"{res['m_glu_meas']:.4f} mol/L"],
+                    ["Fructose", f"{hplc_fru:.1f} %", f"{res['m_fru_meas']:.4f} mol/L", f"{res['m_fru_meas']:.4f} mol/L"],
+                    ["총 C6 등가 몰수합", "-", "-", f"**{res['m_total_meas']:.4f} mol/L**"],
                 ],
-                columns=["성분", "HPLC 측정값", "몰농도 (mol/L)"],
+                columns=["성분", "HPLC 측정값", "몰농도 (mol/L)", "합산 기여값 (mol/L)"],
             )
             st.dataframe(df_step1_hplc, use_container_width=True, hide_index=True)
 
