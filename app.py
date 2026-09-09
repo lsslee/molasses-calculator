@@ -704,9 +704,20 @@ if (calc_button or "res" in st.session_state) and not sources_conflict and selec
             f"- **목표 설정 총당**: `{sum_target_sugar:.2f}%` ➡️ **HPLC 실측 총당**: `{total_measured_sugar:.1f}%` (`{diff_total:+.1f}%p` 차이)"
         )
         if abs(diff_total) > 0.5:
-            st.caption(
-                "⚠️ **주의**: 실측 총당과의 차이가 0.5%p 이상 발생했습니다. 칭량 과정에서의 스케일 오차, 용수 부피 오차, 또는 멸균 후 증발 농축 여부를 재검증하세요."
-            )
+            if complex_source_name == "복합당원":
+                st.caption(
+                    "⚠️ **주의**: 실측 총당과의 차이가 0.5%p 이상 발생했습니다. 정제당/당밀 없이 "
+                    "포도당·액당만 사용했으므로, 이 차이는 **칭량·부피 오차이거나 포도당/액당의 "
+                    "순도 입력값 자체가 실제와 다를 가능성**을 의미합니다 — 입력한 순도가 최신 COA와 "
+                    "일치하는지 함께 확인하세요."
+                )
+            else:
+                st.caption(
+                    "⚠️ **주의**: 실측 총당과의 차이가 0.5%p 이상 발생했습니다. 칭량 과정에서의 스케일 오차, "
+                    "용수 부피 오차, 또는 멸균 후 증발 농축 여부를 재검증하세요. 참고로 포도당/액당을 함께 "
+                    "썼다면, 그 순도 입력값이 틀렸을 경우 이 오차의 일부가 위 ③번 "
+                    f"{complex_source_name} 역산 순도에도 섞여 들어갈 수 있습니다."
+                )
 
     st.markdown("---")
 
@@ -797,70 +808,78 @@ if (calc_button or "res" in st.session_state) and not sources_conflict and selec
 
         st.markdown("---")
 
-        st.markdown(
-            f"""<div class="step-card">
-            <div class="step-title">[Step 3] {complex_source_name} 유래 당 농도 역산 (g/L)</div>
-            차감 후 잔여 몰농도를 헥소스 등가 질량 농도(g/L)로 환산합니다. (자당 가수분해분은 아직 물 흡수분이 포함된 값입니다)
-        </div>""",
-            unsafe_allow_html=True,
-        )
-        st.latex(
-            r"\text{" + complex_source_name + r" 유래 헥소스 등가 질량 (g/L)} = M_{\text{"
-            + complex_source_name + r" 유래 (mol/L)}} \times 180.16"
-        )
-        complex_g_l = res["m_remaining"] * MW_GLU
-        st.info(f"💡 **역산된 {complex_source_name} 유래 헥소스 등가 질량**: `{complex_g_l:.2f} g/L`")
+        if complex_source_name != "복합당원":
+            st.markdown(
+                f"""<div class="step-card">
+                <div class="step-title">[Step 3] {complex_source_name} 유래 당 농도 역산 (g/L)</div>
+                차감 후 잔여 몰농도를 헥소스 등가 질량 농도(g/L)로 환산합니다. (자당 가수분해분은 아직 물 흡수분이 포함된 값입니다)
+            </div>""",
+                unsafe_allow_html=True,
+            )
+            st.latex(
+                r"\text{" + complex_source_name + r" 유래 헥소스 등가 질량 (g/L)} = M_{\text{"
+                + complex_source_name + r" 유래 (mol/L)}} \times 180.16"
+            )
+            complex_g_l = res["m_remaining"] * MW_GLU
+            st.info(f"💡 **역산된 {complex_source_name} 유래 헥소스 등가 질량**: `{complex_g_l:.2f} g/L`")
 
-        st.markdown("---")
+            st.markdown("---")
 
-        st.markdown(
-            f"""<div class="step-card">
-            <div class="step-title">[Step 4] 보정 전 예상 순도(raw) 산출</div>
-            Step 3의 헥소스 등가 질량을, 실제로 칭량 투입한 {complex_source_name} 중량(g/L, [Step 1] 참고)으로
-            나누면 "아직 물 흡수 오차가 반영된" 예상 순도가 나옵니다.
-        </div>""",
-            unsafe_allow_html=True,
-        )
-        st.latex(
-            r"\text{보정 전 예상 순도(\%)} = \frac{\text{" + complex_source_name + r" 유래 헥소스 등가 질량 (g/L)}}"
-            r"{\text{" + complex_source_name + r" 칭량 투입량 (g/L)}} \times 100"
-        )
-        st.info(
-            f"💡 **보정 전 예상 순도**: `{complex_g_l:.2f} g/L ÷ {g_l_complex:.2f} g/L × 100 "
-            f"= {res['raw_actual_purity']:.1f}%` — 아직 자당 물 흡수 오차가 포함되어 스펙({nominal_complex_purity:.1f}%)보다 높게 나옵니다."
-        )
+            st.markdown(
+                f"""<div class="step-card">
+                <div class="step-title">[Step 4] 보정 전 예상 순도(raw) 산출</div>
+                Step 3의 헥소스 등가 질량을, 실제로 칭량 투입한 {complex_source_name} 중량(g/L, [Step 1] 참고)으로
+                나누면 "아직 물 흡수 오차가 반영된" 예상 순도가 나옵니다.
+            </div>""",
+                unsafe_allow_html=True,
+            )
+            st.latex(
+                r"\text{보정 전 예상 순도(\%)} = \frac{\text{" + complex_source_name + r" 유래 헥소스 등가 질량 (g/L)}}"
+                r"{\text{" + complex_source_name + r" 칭량 투입량 (g/L)}} \times 100"
+            )
+            st.info(
+                f"💡 **보정 전 예상 순도**: `{complex_g_l:.2f} g/L ÷ {g_l_complex:.2f} g/L × 100 "
+                f"= {res['raw_actual_purity']:.1f}%` — 아직 자당 물 흡수 오차가 포함되어 스펙({nominal_complex_purity:.1f}%)보다 높게 나옵니다."
+            )
 
-        st.markdown("---")
+            st.markdown("---")
 
-        st.markdown(
-            f"""<div class="step-card">
-            <div class="step-title">[Step 5] 가수분해 질량 보정 및 최종 순도 산출 (%)</div>
-            자당이 가수분해되며 흡수한 물 분자 질량만큼 Step 4의 예상 순도가 부풀어 있으므로,
-            해당 원료의 자당 스펙 비중에 비례해 보정한 뒤 최종 순도(%)와 스펙 대비 차이(%p)를 계산합니다.
-        </div>""",
-            unsafe_allow_html=True,
-        )
-        st.latex(
-            r"\text{보정계수} = \cfrac{1}{1 + \text{Sucrose 스펙 비중} \times (R - 1)}"
-            r"\quad\left(R = \dfrac{2 \times 180.16}{342.30} \approx 1.0526\right)"
-        )
-        st.info(
-            f"💡 **보정계수 계산**: `Sucrose 스펙 비중 = {complex_suc_spec:.1f}% ÷ {nominal_complex_purity:.1f}% "
-            f"= {suc_fraction:.3f}` → `보정계수 = 1 ÷ (1 + {suc_fraction:.3f} × 0.0526) "
-            f"= {1/res['hydrolysis_correction']:.4f}`"
-        )
-        st.latex(
-            r"\text{최종 순도(\%)} = \text{보정 전 예상 순도} \times \text{보정계수}"
-        )
-        st.info(
-            f"💡 **최종 순도**: `{res['raw_actual_purity']:.1f}% × {1/res['hydrolysis_correction']:.4f} "
-            f"= {res['actual_complex_purity']:.1f}%`"
-        )
-        s4_col1, s4_col2, s4_col3 = st.columns(3)
-        with s4_col1:
-            st.metric("보정 전 순도(raw)", f"{res['raw_actual_purity']:.1f}%")
-        with s4_col2:
-            st.metric("보정계수", f"×{1/res['hydrolysis_correction']:.4f}")
-        with s4_col3:
-            st.metric(f"역산된 {complex_source_name} 최종 순도", f"{res['actual_complex_purity']:.1f}%")
-        st.metric("스펙 대비 차이", f"{abs_diff:+.1f}%p")
+            st.markdown(
+                f"""<div class="step-card">
+                <div class="step-title">[Step 5] 가수분해 질량 보정 및 최종 순도 산출 (%)</div>
+                자당이 가수분해되며 흡수한 물 분자 질량만큼 Step 4의 예상 순도가 부풀어 있으므로,
+                해당 원료의 자당 스펙 비중에 비례해 보정한 뒤 최종 순도(%)와 스펙 대비 차이(%p)를 계산합니다.
+            </div>""",
+                unsafe_allow_html=True,
+            )
+            st.latex(
+                r"\text{보정계수} = \cfrac{1}{1 + \text{Sucrose 스펙 비중} \times (R - 1)}"
+                r"\quad\left(R = \dfrac{2 \times 180.16}{342.30} \approx 1.0526\right)"
+            )
+            st.info(
+                f"💡 **보정계수 계산**: `Sucrose 스펙 비중 = {complex_suc_spec:.1f}% ÷ {nominal_complex_purity:.1f}% "
+                f"= {suc_fraction:.3f}` → `보정계수 = 1 ÷ (1 + {suc_fraction:.3f} × 0.0526) "
+                f"= {1/res['hydrolysis_correction']:.4f}`"
+            )
+            st.latex(
+                r"\text{최종 순도(\%)} = \text{보정 전 예상 순도} \times \text{보정계수}"
+            )
+            st.info(
+                f"💡 **최종 순도**: `{res['raw_actual_purity']:.1f}% × {1/res['hydrolysis_correction']:.4f} "
+                f"= {res['actual_complex_purity']:.1f}%`"
+            )
+            s4_col1, s4_col2, s4_col3 = st.columns(3)
+            with s4_col1:
+                st.metric("보정 전 순도(raw)", f"{res['raw_actual_purity']:.1f}%")
+            with s4_col2:
+                st.metric("보정계수", f"×{1/res['hydrolysis_correction']:.4f}")
+            with s4_col3:
+                st.metric(f"역산된 {complex_source_name} 최종 순도", f"{res['actual_complex_purity']:.1f}%")
+            st.metric("스펙 대비 차이", f"{abs_diff:+.1f}%p")
+        else:
+            st.info(
+                "ℹ️ 정제당 또는 당밀을 선택하지 않아 [Step 3~5](복합당원 순도 역산)는 "
+                "해당되지 않습니다. 포도당·액당의 순도는 입력값을 그대로 신뢰하지만, "
+                "그 값이 틀렸는지는 위 ④번 '공정 및 칭량 오차 검증'(목표 총당 vs HPLC 실측 총당)에서 "
+                "간접적으로 확인할 수 있습니다."
+            )
