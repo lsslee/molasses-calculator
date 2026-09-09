@@ -835,17 +835,17 @@ if (calc_button or "res" in st.session_state) and not sources_conflict and selec
             unsafe_allow_html=True,
         )
         st.latex(
-            r"\text{보정계수} = 1 + \frac{\text{Sucrose 스펙}}{\text{총 스펙 순도}} \times "
-            r"\left(\frac{2 \times 180.16}{342.30} - 1\right)"
+            r"\text{보정계수} = \cfrac{1}{1 + \dfrac{\text{Sucrose 스펙}}{\text{총 스펙 순도}} \times "
+            r"\left(\dfrac{2 \times 180.16}{342.30} - 1\right)}"
         )
         st.latex(
-            r"\text{최종 순도(\%)} = \frac{\text{보정 전 예상 순도}}{\text{보정계수}}"
+            r"\text{최종 순도(\%)} = \text{보정 전 예상 순도} \times \text{보정계수}"
         )
         s4_col1, s4_col2, s4_col3 = st.columns(3)
         with s4_col1:
             st.metric("보정 전 순도(raw)", f"{res['raw_actual_purity']:.1f}%")
         with s4_col2:
-            st.metric(f"보정계수", f"×{res['hydrolysis_correction']:.4f}")
+            st.metric("보정계수", f"×{1/res['hydrolysis_correction']:.4f}")
         with s4_col3:
             st.metric(f"역산된 {complex_source_name} 최종 순도", f"{res['actual_complex_purity']:.1f}%")
         st.metric("스펙 대비 차이", f"{abs_diff:+.1f}%p")
