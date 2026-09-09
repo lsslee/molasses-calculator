@@ -835,11 +835,20 @@ if (calc_button or "res" in st.session_state) and not sources_conflict and selec
             unsafe_allow_html=True,
         )
         st.latex(
-            r"\text{보정계수} = \cfrac{1}{1 + \dfrac{\text{Sucrose 스펙}}{\text{총 스펙 순도}} \times "
-            r"\left(\dfrac{2 \times 180.16}{342.30} - 1\right)}"
+            r"\text{보정계수} = \cfrac{1}{1 + \text{Sucrose 스펙 비중} \times (R - 1)}"
+            r"\quad\left(R = \dfrac{2 \times 180.16}{342.30} \approx 1.0526\right)"
+        )
+        st.info(
+            f"💡 **보정계수 계산**: `Sucrose 스펙 비중 = {complex_suc_spec:.1f}% ÷ {nominal_complex_purity:.1f}% "
+            f"= {suc_fraction:.3f}` → `보정계수 = 1 ÷ (1 + {suc_fraction:.3f} × 0.0526) "
+            f"= {1/res['hydrolysis_correction']:.4f}`"
         )
         st.latex(
             r"\text{최종 순도(\%)} = \text{보정 전 예상 순도} \times \text{보정계수}"
+        )
+        st.info(
+            f"💡 **최종 순도**: `{res['raw_actual_purity']:.1f}% × {1/res['hydrolysis_correction']:.4f} "
+            f"= {res['actual_complex_purity']:.1f}%`"
         )
         s4_col1, s4_col2, s4_col3 = st.columns(3)
         with s4_col1:
