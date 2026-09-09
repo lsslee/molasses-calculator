@@ -764,19 +764,25 @@ if (calc_button or "res" in st.session_state) and not sources_conflict and selec
 
         st.markdown("---")
 
+        # [FIX] 선택된 당원에 따라 수식/설명이 동적으로 바뀌도록 구성
+        single_sources_selected = [s for s in ["포도당", "액당"] if s in selected_sources]
+        single_sources_label = "/".join(single_sources_selected) if single_sources_selected else "없음"
         st.markdown(
             f"""<div class="step-card">
             <div class="step-title">[Step 2] 단일 당원 유래 몰농도 분리 & 차감</div>
-            HPLC 총 몰수에서 단일 당원(포도당/액당) 투입분을 차감하여 {complex_source_name} 유래 몰수만 추출합니다.
+            HPLC 총 몰수에서 단일 당원({single_sources_label}) 투입분을 차감하여 {complex_source_name} 유래 몰수만 추출합니다.
         </div>""",
             unsafe_allow_html=True,
         )
 
         s2_col1, s2_col2 = st.columns([2, 1])
         with s2_col1:
-            st.latex(
-                r"M_{\text{" + complex_source_name + r" 유래}} = M_{\text{HPLC 총몰수}} - M_{\text{포도당}} - M_{\text{액당}}"
-            )
+            latex_rhs = r"M_{\text{HPLC 총몰수}}"
+            if "포도당" in selected_sources:
+                latex_rhs += r" - M_{\text{포도당}}"
+            if "액당" in selected_sources:
+                latex_rhs += r" - M_{\text{액당}}"
+            st.latex(r"M_{\text{" + complex_source_name + r" 유래}} = " + latex_rhs)
             step2_list = [["HPLC 총 C6 등가 몰수", f"{res['m_total_meas']:.4f} mol/L"]]
             if "포도당" in selected_sources:
                 step2_list.append(["포도당 유래 몰수 차감액", f"- {res['m_glu_powder']:.4f} mol/L"])
