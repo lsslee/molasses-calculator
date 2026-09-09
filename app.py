@@ -461,6 +461,37 @@ if (calc_button or "res" in st.session_state) and not sources_conflict and selec
 
     abs_diff = actual_complex_purity - nominal_complex_purity
 
+    # [NEW] 복합당원 없이 포도당 또는 액당 "단독" 사용 시, HPLC로 그 순도를
+    # 역검증합니다 (다른 당원이 없어 방정식이 충분하므로 가능). 두 개 이상의
+    # 단일당원을 함께 쓰면 미지수가 방정식보다 많아져 역산 불가 — 이 경우엔
+    # 기존처럼 입력한 순도를 그대로 신뢰합니다.
+    single_only_selected = None
+    single_only_nominal_purity = 0.0
+    single_only_actual_purity = 0.0
+    single_only_diff = 0.0
+    single_only_g_l = 0.0
+    single_only_contam_flag = False
+
+    single_sugar_srcs = [s for s in ["포도당", "액당"] if s in selected_sources]
+    if complex_source_name == "복합당원" and len(single_sugar_srcs) == 1:
+        single_only_selected = single_sugar_srcs[0]
+        if single_only_selected == "포도당":
+            single_only_g_l = g_l_glu
+            single_only_nominal_purity = p_glu
+            measured_glu_g_l = hplc_glu * 10.0  # 포도당은 단당류라 MW 변환 불필요
+        else:  # 액당 (100% Glucose로 취급)
+            single_only_g_l = g_l_liq
+            single_only_nominal_purity = p_liq
+            measured_glu_g_l = hplc_glu * 10.0
+
+        single_only_actual_purity = (
+            (measured_glu_g_l / single_only_g_l) * 100.0 if single_only_g_l > 0 else 0.0
+        )
+        single_only_diff = single_only_actual_purity - single_only_nominal_purity
+        # Sucrose나 Fructose가 유의미하게 검출되면, "단당류 단독" 가정 자체가
+        # 깨진 것이므로(오염 또는 액당이 순수 Glucose가 아닐 가능성) 경고 플래그
+        single_only_contam_flag = (hplc_suc > 0.1) or (hplc_fru > 0.1)
+
     # 실제 역산 기반 기여농도 및 비중 계산
     real_sugar_contributions = {}
     total_measured_sugar = hplc_suc + hplc_glu + hplc_fru
@@ -490,6 +521,12 @@ if (calc_button or "res" in st.session_state) and not sources_conflict and selec
         "raw_actual_purity": raw_actual_purity,
         "actual_complex_purity": actual_complex_purity,
         "hydrolysis_correction": hydrolysis_correction,
+        "single_only_selected": single_only_selected,
+        "single_only_nominal_purity": single_only_nominal_purity,
+        "single_only_actual_purity": single_only_actual_purity,
+        "single_only_diff": single_only_diff,
+        "single_only_g_l": single_only_g_l,
+        "single_only_contam_flag": single_only_contam_flag,
         "abs_diff": abs_diff,
         "m_suc_meas": m_suc_meas,
         "m_glu_meas": m_glu_meas,
@@ -549,6 +586,28 @@ if (calc_button or "res" in st.session_state) and not sources_conflict and selec
                 f"ℹ️ 가수분해 질량 보정계수: ×{1/hydrolysis_correction:.4f} "
                 f"(자당 스펙 비중 {complex_suc_spec:.1f}% 기준 — 실제 가수분해 진행률과 무관하게 적용됨)"
             )
+        elif single_only_selected is not None:
+            m1, m2 = st.columns([1, 1.3])
+            with m1:
+                st.metric(f"{single_only_selected} 스펙 순도", f"{single_only_nominal_purity:.1f}%")
+            with m2:
+                delta_class = "highlight-delta-pos" if single_only_diff >= 0 else "highlight-delta-neg"
+                st.markdown(
+                    f"""
+                    <div class="highlight-card">
+                        <div class="highlight-title">🎯 역산된 {single_only_selected} 실제 순도</div>
+                        <div class="highlight-value">{single_only_actual_purity:.1f}%</div>
+                        <div class="{delta_class}">스펙 대비 차이: {single_only_diff:+.1f}%p</div>
+                    </div>
+                """,
+                    unsafe_allow_html=True,
+                )
+            if single_only_contam_flag:
+                st.warning(
+                    f"⚠️ {single_only_selected} 단독 사용인데 HPLC에서 Sucrose 또는 Fructose가 "
+                    "유의미하게 검출됐습니다 — 원료 오염이거나, 액당이 순수 Glucose가 아닐 "
+                    "가능성이 있습니다. 이 경우 위 역산값의 신뢰도가 떨어집니다."
+                )
         else:
             st.metric(
                 "HPLC 실측 총 당농도", f"{res['measured_total_sugar_percent']:.1f}%"
@@ -704,12 +763,18 @@ if (calc_button or "res" in st.session_state) and not sources_conflict and selec
             f"- **목표 설정 총당**: `{sum_target_sugar:.2f}%` ➡️ **HPLC 실측 총당**: `{total_measured_sugar:.1f}%` (`{diff_total:+.1f}%p` 차이)"
         )
         if abs(diff_total) > 0.5:
-            if complex_source_name == "복합당원":
+            if complex_source_name == "복합당원" and single_only_selected is None:
                 st.caption(
-                    "⚠️ **주의**: 실측 총당과의 차이가 0.5%p 이상 발생했습니다. 정제당/당밀 없이 "
-                    "포도당·액당만 사용했으므로, 이 차이는 **칭량·부피 오차이거나 포도당/액당의 "
-                    "순도 입력값 자체가 실제와 다를 가능성**을 의미합니다 — 입력한 순도가 최신 COA와 "
-                    "일치하는지 함께 확인하세요."
+                    "⚠️ **주의**: 실측 총당과의 차이가 0.5%p 이상 발생했습니다. 포도당·액당을 "
+                    "함께 사용해 개별 순도를 분리 역산할 수 없으므로, 이 차이는 **칭량·부피 오차이거나 "
+                    "두 원료 중 하나(또는 둘 다)의 순도 입력값이 실제와 다를 가능성**을 의미합니다 — "
+                    "입력한 순도가 최신 COA와 일치하는지 함께 확인하세요."
+                )
+            elif complex_source_name == "복합당원":
+                st.caption(
+                    "⚠️ **주의**: 실측 총당과의 차이가 0.5%p 이상 발생했습니다. 위 [Step 3'] "
+                    f"{single_only_selected} 순도 역검증 결과와 함께 보면, 이 차이가 순도 입력 오류인지 "
+                    "칭량·부피 오차인지 더 구체적으로 판단할 수 있습니다."
                 )
             else:
                 st.caption(
@@ -876,10 +941,34 @@ if (calc_button or "res" in st.session_state) and not sources_conflict and selec
             with s4_col3:
                 st.metric(f"역산된 {complex_source_name} 최종 순도", f"{res['actual_complex_purity']:.1f}%")
             st.metric("스펙 대비 차이", f"{abs_diff:+.1f}%p")
+        elif single_only_selected is not None:
+            st.markdown(
+                f"""<div class="step-card">
+                <div class="step-title">[Step 3'] {single_only_selected} 순도 역검증 (가수분해 보정 불필요)</div>
+                다른 당원이 없으므로 HPLC 실측 Glucose가 전부 {single_only_selected} 유래입니다.
+                {single_only_selected}은 단당류(가수분해 대상 아님)라 정제당/당밀과 달리
+                Step 4~5의 가수분해 보정 없이 바로 순도를 계산합니다.
+            </div>""",
+                unsafe_allow_html=True,
+            )
+            st.latex(
+                r"\text{역산 순도(\%)} = \frac{\text{HPLC Glucose (g/L)}}{\text{" + single_only_selected + r" 칭량 투입량 (g/L)}} \times 100"
+            )
+            st.info(
+                f"💡 **역산 순도**: `{hplc_glu*10:.2f} g/L ÷ {single_only_g_l:.2f} g/L × 100 "
+                f"= {single_only_actual_purity:.1f}%` (입력 스펙: {single_only_nominal_purity:.1f}%, "
+                f"차이 {single_only_diff:+.1f}%p)"
+            )
+            if single_only_contam_flag:
+                st.warning(
+                    f"⚠️ Sucrose({hplc_suc:.1f}%) 또는 Fructose({hplc_fru:.1f}%)가 검출되어 "
+                    f"\"{single_only_selected} 단독 = 순수 Glucose\" 가정이 깨졌을 수 있습니다. "
+                    "위 역산값은 참고만 하세요."
+                )
         else:
             st.info(
-                "ℹ️ 정제당 또는 당밀을 선택하지 않아 [Step 3~5](복합당원 순도 역산)는 "
-                "해당되지 않습니다. 포도당·액당의 순도는 입력값을 그대로 신뢰하지만, "
-                "그 값이 틀렸는지는 위 ④번 '공정 및 칭량 오차 검증'(목표 총당 vs HPLC 실측 총당)에서 "
-                "간접적으로 확인할 수 있습니다."
+                "ℹ️ 포도당과 액당을 함께 사용하면(복합당원 없이) 두 원료가 모두 Glucose로 "
+                "측정되어 개별 순도를 분리 역산할 수 없습니다 — 미지수 2개(포도당·액당 순도)에 "
+                "방정식은 1개(HPLC Glucose)뿐이라 수학적으로 불가능합니다. 이 경우 입력한 순도를 "
+                "그대로 신뢰하며, ④번 '공정 및 칭량 오차 검증'으로 전체적인 이상 여부만 확인합니다."
             )
